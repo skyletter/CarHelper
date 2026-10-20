@@ -24,7 +24,7 @@
 
 ## 使用方法
 
-1. 安装 `CarHelper-v2.3.apk`
+1. 安装 `CarHelper-v2.4.apk`
 2. 把「车机助手」加入车机的**自启动白名单**（不同版本位置不同，一般在车辆设置里）
 3. 重启车机
 
@@ -160,6 +160,13 @@ CI（GitHub Actions）在推送到 `main` 时自动构建并发布 Release。
 ---
 
 ## 更新日志
+
+### v2.4
+
+- 修复面板「音源解锁」状态显示错误：改为实时查询车机当前音源
+  （`fce_misc_service_source_msg.getCurrentSource()`，`app`/`navi` 都算已放行），
+  覆盖安装或旧版本解锁过的场景不再误报「未解锁」
+- `requestSource` 调用补上 AIDL 的 `force` 参数，调用更规范
 
 ### v2.3
 

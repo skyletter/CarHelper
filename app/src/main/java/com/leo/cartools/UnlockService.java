@@ -54,8 +54,18 @@ public class UnlockService extends Service {
     public static boolean isUnlocked(Context ctx) {
         long boot = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
                 .getLong(KEY_BOOT_TIME, Long.MIN_VALUE);
-        return boot != Long.MIN_VALUE
-                && Math.abs(currentBootTime() - boot) < BOOT_TIME_TOLERANCE_MS;
+        if (boot != Long.MIN_VALUE
+                && Math.abs(currentBootTime() - boot) < BOOT_TIME_TOLERANCE_MS) {
+            return true;
+        }
+        // 没有本次开机的标记（例如刚覆盖安装、或旧版本解锁的）时，
+        // 直接问车机当前音源，避免状态显示错误
+        if (AudioSource.isSourceUnmuted()) {
+            ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+                    .edit().putLong(KEY_BOOT_TIME, currentBootTime()).apply();
+            return true;
+        }
+        return false;
     }
 
     /** 开机时清掉标记，保证重启后一定会重新解锁。 */
@@ -145,6 +155,7 @@ public class UnlockService extends Service {
         try {
             data.writeInterfaceToken(SVC_DESC);
             data.writeString(sourceId);
+            data.writeInt(0);                   // AIDL: requestSource(String, boolean force)
             boolean ok = binder.transact(TRANSACTION_requestSource, data, reply, 0);
             if (!ok) return -1;                 // binder 调用未完成，按失败重试
             reply.readException();
