@@ -24,7 +24,7 @@
 
 ## 使用方法
 
-1. 安装 `CarHelper-v2.1.apk`
+1. 安装 `CarHelper-v2.3.apk`
 2. 把「车机助手」加入车机的**自启动白名单**（不同版本位置不同，一般在车辆设置里）
 3. 重启车机
 
@@ -134,12 +134,20 @@ requestSource("app")
 ## 构建
 
 ```bash
-gradle assembleDebug
+gradle assembleRelease
 ```
 
-产物：`app/build/outputs/apk/debug/app-debug.apk`（用 debug 签名，方便车机直接安装）。
+产物：`app/build/outputs/apk/release/app-release.apk`。
 
-CI（GitHub Actions）会在推送到 `main` 时自动构建并发布 Release。
+### 签名
+
+仓库内 `keystore/carhelper.jks` 是固定签名密钥（`androiddebugkey` / 密码 `android`），debug 与 release 都用它，保证每个版本证书一致，可以直接覆盖升级。
+
+> v2.2 及更早的 Release 由 CI 临时生成 debug keystore 签名，**每个版本证书都不同**，升级前必须先卸载。从 v2.3 起不再有这个问题。
+>
+> 这是公开仓库里的调试密钥，仅用于本车机工具，不要拿去签其他项目。
+
+CI（GitHub Actions）在推送到 `main` 时自动构建并发布 Release。
 
 ---
 
@@ -152,6 +160,15 @@ CI（GitHub Actions）会在推送到 `main` 时自动构建并发布 Release。
 ---
 
 ## 更新日志
+
+### v2.3
+
+- **签名固定**：改用仓库内置 keystore，后续版本可直接覆盖升级
+- 开机不弹面板：开机 60 秒内被自启动拉起时只启动服务、不显示界面
+- 解锁状态改用「开机时刻」比对，避免误报「已解锁」
+- 「重启桥接」改为真正停止后再启动
+- 手动解锁不再等 8 秒（约 1 秒生效）
+- 面板距离文案改为「1.7 公里 / 500 米」
 
 ### v2.2
 

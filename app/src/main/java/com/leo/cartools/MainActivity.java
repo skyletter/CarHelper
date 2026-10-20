@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -42,6 +43,7 @@ public class MainActivity extends Activity {
     private TextView bridgeTitle, bridgeDesc;
     private TextView unlockTitle, unlockDesc;
     private Button btnUnlock;
+    private Button btnRestartBridge;
 
     private BridgeService bridge;
     private boolean bound;
@@ -75,6 +77,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // 开机自启拉起本界面时，只启动服务、不显示面板（60 秒内视为开机阶段）
+        if (SystemClock.elapsedRealtime() < 60_000L) {
+            startBridge();
+            finish();
+            return;
+        }
+
         getWindow().setStatusBarColor(BG);
         setContentView(buildUi());
 
@@ -85,6 +95,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
+        if (isFinishing()) return;
         startBridge();
         Intent it = new Intent(this, BridgeService.class);
         bound = bindService(it, conn, Context.BIND_AUTO_CREATE);
@@ -169,18 +180,20 @@ public class MainActivity extends Activity {
 
     private void doUnlock() {
         UnlockService.clearUnlocked(this);
-        startService(new Intent(this, UnlockService.class));
-        Toast.makeText(this, "已发起解锁，约 8 秒后生效", Toast.LENGTH_SHORT).show();
+        Intent it = new Intent(this, UnlockService.class);
+        it.putExtra(UnlockService.EXTRA_FAST, true);   // 手动触发不等 8 秒开机延迟
+        startService(it);
+        Toast.makeText(this, "已发起解锁，约 1 秒后生效", Toast.LENGTH_SHORT).show();
         btnUnlock.setEnabled(false);
         ticker.postDelayed(() -> {
             btnUnlock.setEnabled(true);
             refresh();
-        }, 9000);
+        }, 3000);
         refresh();
     }
 
     private void restartBridge() {
-        stopService(new Intent(this, BridgeService.class));
+        // 先解绑再停止，确保服务真的被销毁（START_STICKY 下 stopService 是异步的）
         if (bound) {
             try {
                 unbindService(conn);
@@ -189,11 +202,19 @@ public class MainActivity extends Activity {
             bound = false;
         }
         bridge = null;
-        startBridge();
-        Intent it = new Intent(this, BridgeService.class);
-        bound = bindService(it, conn, Context.BIND_AUTO_CREATE);
+        stopService(new Intent(this, BridgeService.class));
+
+        btnRestartBridge.setEnabled(false);
         Toast.makeText(this, "桥接已重启", Toast.LENGTH_SHORT).show();
-        ticker.postDelayed(this::refresh, 600);
+
+        // 等 stop 生效后再拉起，避免 stop/start 落在同一帧被系统合并
+        ticker.postDelayed(() -> {
+            startBridge();
+            Intent it = new Intent(this, BridgeService.class);
+            bound = bindService(it, conn, Context.BIND_AUTO_CREATE);
+            if (btnRestartBridge != null) btnRestartBridge.setEnabled(true);
+            ticker.postDelayed(this::refresh, 600);
+        }, 500);
     }
 
     /* ---------------- 界面 ---------------- */
@@ -296,6 +317,7 @@ public class MainActivity extends Activity {
         btns.addView(btnUnlock);
 
         Button btnRestart = new Button(this);
+        btnRestartBridge = btnRestart;
         btnRestart.setAllCaps(false);
         btnRestart.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         btnRestart.setText("重启桥接");

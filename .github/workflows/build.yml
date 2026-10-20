@@ -38,19 +38,19 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+      - name: Build release APK（固定签名）
+        run: gradle assembleRelease --no-daemon
 
       - name: Rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk "out/CarHelper-v${{ steps.ver.outputs.version }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "out/CarHelper-v${{ steps.ver.outputs.version }}.apk"
           ls -l out/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CarHelper-v${{ steps.ver.outputs.version }}-debug
+          name: CarHelper-v${{ steps.ver.outputs.version }}
           path: out/*.apk
           if-no-files-found: error
 
@@ -70,10 +70,13 @@ jobs:
             2. **第三方播放器显示播放中但没声音**（AntennaPod / 喜马拉雅 / QQ 音乐等）
                → 开机自动解锁音源，不用再先开一次酷我
 
-            ## 本次更新
+            ## 本次更新（v2.3）
 
-            - 新增控制面板：查看桥接与解锁状态，手动解锁音源、重启桥接
-            - 点图标不再只是弹提示，会打开面板
+            - **签名固定**：改用仓库内置 keystore，后续版本可直接覆盖升级，不用卸载
+            - 开机不弹面板：开机 1 分钟内被自动拉起时只启动服务，不显示界面
+            - 解锁状态判断改用开机时刻比对，避免误报「已解锁」
+            - 「重启桥接」改为真正停止后重启
+            - 手动解锁不再等 8 秒；面板距离显示改为「1.7 公里」
 
             ## 使用方法
 

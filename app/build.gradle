@@ -13,18 +13,32 @@ android {
         // 反射 ServiceManager.getService 在 P 上属 greylist（可用，会打一条日志）；
         // 若将来固件升到 Android 10+，需改用 Parcel / IBinder 别名方案获取该 binder。
         targetSdk 28
-        versionCode 22
-        versionName "2.2"
+        versionCode 23
+        versionName "2.3"
+    }
+
+    /**
+     * 固定签名：仓库内置 keystore，保证每个版本的证书一致，可直接覆盖升级。
+     * 早期版本用 CI 临时生成的 debug keystore，导致每个 release 签名都不同。
+     * 注意：这是公开仓库里的调试密钥，仅用于此车机工具，不要用于其他项目。
+     */
+    signingConfigs {
+        release {
+            storeFile file("../keystore/carhelper.jks")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
     }
 
     buildTypes {
         debug {
             minifyEnabled false
+            signingConfig signingConfigs.release
         }
         release {
             minifyEnabled false
-            // 用 debug 签名,便于车机直接安装
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
         }
     }
 

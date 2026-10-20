@@ -27,36 +27,46 @@ public class UnlockService extends Service {
     private static final String TARGET_SOURCE = "app";
 
     private static final long FIRST_DELAY_MS = 8000L;
+    private static final long FAST_DELAY_MS = 600L;
     private static final long RETRY_DELAY_MS = 5000L;
     private static final int MAX_ATTEMPTS = 6;
 
+    /** 面板手动触发时置 true，跳过开机那段 8 秒等待 */
+    public static final String EXTRA_FAST = "fast";
+
     private static final String PREF = "cartools";
-    private static final String KEY_UNLOCKED_AT = "unlocked_elapsed";
+    private static final String KEY_BOOT_TIME = "unlock_boot_time";
+    /** 开机时刻允许的误差 */
+    private static final long BOOT_TIME_TOLERANCE_MS = 5000L;
 
     private static volatile boolean sRunning = false;
 
+    /** 当前这次开机的时刻；重启后该值会变化 */
+    private static long currentBootTime() {
+        return System.currentTimeMillis() - SystemClock.elapsedRealtime();
+    }
+
     /**
      * 本次开机是否已解锁过。
-     * 用 elapsedRealtime 记录解锁时刻；重启后该时钟归零重计，因此
-     * “当前值 < 记录值”即代表车机重启过，需要重新解锁。
-     * <p>
-     * 用途：避免用户每次点图标都重跑一次 requestSource，打断正在播放的音源。
+     * 记录的是「解锁时的开机时刻」，重启后开机时刻不同 → 自动判定为未解锁。
+     * 比用 elapsedRealtime 直接比较更稳（后者在 BOOT_COMPLETED 未送达时会误判）。
      */
     public static boolean isUnlocked(Context ctx) {
-        long at = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
-                .getLong(KEY_UNLOCKED_AT, -1L);
-        return at >= 0 && SystemClock.elapsedRealtime() >= at;
+        long boot = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+                .getLong(KEY_BOOT_TIME, Long.MIN_VALUE);
+        return boot != Long.MIN_VALUE
+                && Math.abs(currentBootTime() - boot) < BOOT_TIME_TOLERANCE_MS;
     }
 
     /** 开机时清掉标记，保证重启后一定会重新解锁。 */
     public static void clearUnlocked(Context ctx) {
         ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
-                .edit().remove(KEY_UNLOCKED_AT).apply();
+                .edit().remove(KEY_BOOT_TIME).apply();
     }
 
     private void markUnlocked() {
         getSharedPreferences(PREF, Context.MODE_PRIVATE)
-                .edit().putLong(KEY_UNLOCKED_AT, SystemClock.elapsedRealtime()).apply();
+                .edit().putLong(KEY_BOOT_TIME, currentBootTime()).apply();
     }
 
     @Override
@@ -67,11 +77,13 @@ public class UnlockService extends Service {
         }
         sRunning = true;
 
+        final boolean fast = intent != null && intent.getBooleanExtra(EXTRA_FAST, false);
+
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    unlock();
+                    unlock(fast);
                 } finally {
                     sRunning = false;
                     stopSelf();
@@ -88,9 +100,9 @@ public class UnlockService extends Service {
         return null;
     }
 
-    private void unlock() {
+    private void unlock(boolean fast) {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            sleep(attempt == 1 ? FIRST_DELAY_MS : RETRY_DELAY_MS);
+            sleep(attempt == 1 ? (fast ? FAST_DELAY_MS : FIRST_DELAY_MS) : RETRY_DELAY_MS);
 
             IBinder binder = getServiceBinder();
             if (binder == null) {

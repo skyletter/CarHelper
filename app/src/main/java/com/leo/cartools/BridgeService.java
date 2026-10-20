@@ -214,10 +214,16 @@ public class BridgeService extends Service {
         return active;
     }
 
-    /** 返回 "1.7 km" 这样的可读距离，无导航时返回 null */
+    /** 返回 "1.7 公里" / "500 米" 这样的可读距离，无导航时返回 null */
     public String getNavDistance() {
         if (!active || lastDisStr == null || lastDisStr.isEmpty()) return null;
-        return lastDisStr.replace(",", " ");
+        if (lastDisStr.endsWith(",km")) {
+            return lastDisStr.substring(0, lastDisStr.length() - 3) + " 公里";
+        }
+        if (lastDisStr.endsWith(",m")) {
+            return lastDisStr.substring(0, lastDisStr.length() - 2) + " 米";
+        }
+        return lastDisStr;
     }
 
     public long getLastRxAgoMs() {
