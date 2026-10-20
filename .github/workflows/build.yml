@@ -16,6 +16,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Read version from build.gradle
+        id: ver
+        run: |
+          V=$(sed -n 's/.*versionName[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle | head -1)
+          if [ -z "$V" ]; then
+            echo "::error::versionName not found in app/build.gradle"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building CarHelper v$V"
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -33,22 +44,22 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk out/CarHelper-v2.0.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "out/CarHelper-v${{ steps.ver.outputs.version }}.apk"
           ls -l out/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CarHelper-debug
+          name: CarHelper-v${{ steps.ver.outputs.version }}-debug
           path: out/*.apk
           if-no-files-found: error
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0
-          name: v2.0 — 导航仪表桥接 + 音源解锁
-          files: out/CarHelper-v2.0.apk
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: v${{ steps.ver.outputs.version }} — 导航仪表桥接 + 音源解锁
+          files: out/CarHelper-v${{ steps.ver.outputs.version }}.apk
           body: |
             长安 C211 平台车机（全志 T7 / Android 9）二合一工具。
 
@@ -59,9 +70,16 @@ jobs:
             2. **第三方播放器显示播放中但没声音**（AntennaPod / 喜马拉雅 / QQ 音乐等）
                → 开机自动解锁音源，不用再先开一次酷我
 
+            ## 本次更新
+
+            - 新增应用图标（长安蓝 C 环）
+            - 点图标不再重复解锁音源，避免打断正在播放的音频
+            - 修复：映射表之外的转向图标会导致仪表被误清空
+            - 修复：binder 调用失败时被误判为已解锁，不再重试
+
             ## 使用方法
 
-            1. 安装下面的 `CarHelper-v2.0.apk`
+            1. 安装下面的 `CarHelper-v${{ steps.ver.outputs.version }}.apk`
             2. 把「车机助手」加入车机**自启动白名单**
             3. 重启车机
 

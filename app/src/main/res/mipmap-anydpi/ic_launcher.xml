@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  车机助手图标：长安蓝渐变底 + C 字开口环 + 前进箭头（方案 D）
+
+  刻意不用 adaptive-icon：C211 车机的 launcher 是定制实现，
+  对 mipmap-anydpi-v26 的解析行为不确定，单一普通 vector 最稳。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 圆角方形底，108dp 尺度下圆角 24dp -->
+    <path android:pathData="M24,0 L84,0 A24,24 0 0,1 108,24 L108,84 A24,24 0 0,1 84,108 L24,108 A24,24 0 0,1 0,84 L0,24 A24,24 0 0,1 24,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0" android:color="#FF2E63E8" />
+                <item android:offset="1" android:color="#FF0A2159" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 512 画布内容等比缩放到 108 内居中 -->
+    <group
+        android:translateX="4.8"
+        android:translateY="2.8"
+        android:scaleX="0.2"
+        android:scaleY="0.2">
+
+        <!-- C 字开口环：起点右上，绕左侧大弧到右下，开口朝右 -->
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M330,146 A138,138 0 1,0 330,366"
+            android:strokeColor="#FFF2F6FF"
+            android:strokeWidth="44"
+            android:strokeLineCap="round" />
+
+        <!-- 开口处的前进箭头 -->
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M330,256 L392,256 M392,256 L356,220 M392,256 L356,292"
+            android:strokeColor="#FF7FE3FF"
+            android:strokeWidth="26"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

@@ -14,6 +14,8 @@ public class BootReceiver extends BroadcastReceiver {
         } else {
             context.startService(bridge);
         }
+        // 重启后功放会重新静音，清标记保证一定会再解锁一次
+        UnlockService.clearUnlocked(context);
         context.startService(new Intent(context, UnlockService.class));
     }
 }

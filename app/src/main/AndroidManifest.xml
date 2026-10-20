@@ -6,6 +6,7 @@
 
     <application
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="车机助手">
 
         <!-- 无界面入口：拉起两个服务后立即退出，只提示一条 Toast -->

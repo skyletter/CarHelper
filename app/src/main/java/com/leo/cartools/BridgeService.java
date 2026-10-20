@@ -92,10 +92,13 @@ public class BridgeService extends Service {
         String disAuto = i.getStringExtra("SEG_REMAIN_DIS_AUTO");
 
         int clusterIcon = IconMap.toCluster(icon);
-        if (clusterIcon <= 0) return;          // 未知图标：保留上一次
 
+        // 先续命再看图标：映射表里没有的新图标只跳过本次更新，
+        // 不应让 watchdog 误判导航结束而清空仪表
         lastRxAt = System.currentTimeMillis();
         active = true;
+
+        if (clusterIcon <= 0) return;          // 未知图标：保留上一次
 
         String disStr = formatDis(disAuto, dis);
         if (disStr == null) return;

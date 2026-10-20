@@ -20,9 +20,16 @@ public class MainActivity extends Activity {
         } else {
             startService(bridge);
         }
-        startService(new Intent(this, UnlockService.class));
 
-        Toast.makeText(this, "车机助手已启动：导航仪表桥接 + 音源解锁", Toast.LENGTH_SHORT).show();
+        // 本次开机已解锁过就不再重跑：避免正播放时被 requestSource 打断音源
+        boolean needUnlock = !UnlockService.isUnlocked(this);
+        if (needUnlock) {
+            startService(new Intent(this, UnlockService.class));
+        }
+
+        Toast.makeText(this, needUnlock
+                ? "车机助手已启动：导航仪表桥接 + 音源解锁"
+                : "导航仪表桥接已启动（音源已解锁）", Toast.LENGTH_SHORT).show();
         finish();
     }
 }
