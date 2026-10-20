@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
-        android:allowBackup="true"
-        android:label="CarUnlock">
+        android:allowBackup="false"
+        android:label="车机助手">
 
-        <!-- 无界面入口:拉起 Service 后立即 finish(),用户不可见 -->
+        <!-- 无界面入口：拉起两个服务后立即退出，只提示一条 Toast -->
         <activity
             android:name=".MainActivity"
             android:excludeFromRecents="true"
@@ -20,12 +21,17 @@
             </intent-filter>
         </activity>
 
-        <!-- 实际执行解锁;完成后 stopSelf() 自毁,不常驻、不弹通知 -->
+        <!-- 导航仪表桥接：常驻前台服务 -->
+        <service
+            android:name=".BridgeService"
+            android:exported="false" />
+
+        <!-- 音源解锁：完成即自毁，不常驻 -->
         <service
             android:name=".UnlockService"
             android:exported="false" />
 
-        <!-- 开机广播兜底(车机 com.autostart 也会拉起 MainActivity) -->
+        <!-- 开机自启（部分车机只发 QUICKBOOT_POWERON） -->
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"

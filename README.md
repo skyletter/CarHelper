@@ -1,199 +1,151 @@
-# CarUnlock
+# 车机助手（CarHelper）
 
-**长安 C211 平台车机 —— 第三方播放器无声修复**
+**长安 C211 平台车机（全志 T7 / Android 9）二合一工具**
 
-装好即用，开机自动解除功放静音。AntennaPod、喜马拉雅、QQ 音乐等第三方播放器再也不用先开一次酷我才有声音。
+一个 APK 解决两个原厂遗留问题：
 
----
+| # | 问题 | 效果 |
+|---|---|---|
+| 1 | 升级高德后，仪表盘「导航信息」页变灰进不去 | 导航时自动恢复，显示转向箭头 + 到路口距离 |
+| 2 | 第三方播放器（AntennaPod / 喜马拉雅 / QQ 音乐）显示播放中但没声音 | 开机自动解锁音源，不用再先开一次酷我 |
 
-## 你遇到的是这个问题吗？
-
-如果你的车机符合以下现象，本工具就是为你准备的：
-
-| 现象 | 说明 |
-|---|---|
-| 第三方播放器显示在播放，但**扬声器没声音** | AntennaPod / 喜马拉雅 / QQ 音乐等 |
-| **车机自带的酷我、网易云有声音** | 高德导航也有声音 |
-| **先打开一次自带音乐（酷我），再开第三方播放器就有声了** | 经典的"土办法" |
-| 点击暂停再播放**没用** | |
-| **每次开机都会复现** | |
-
-如果你全中，那这**不是播放器的问题**，是车机的音频通道机制问题 —— 继续往下看。
+> 本仓库由原 **CarUnlock** 升级而来，已合并导航仪表桥接功能，应用名改为「车机助手」。
 
 ---
 
-## 适用范围
+## 适用车型
 
-- **长安汽车 inCall / Coagent C211 平台车机**（全志 T7，Android 9）
-  - 常见车型：二代逸动、逸动 PLUS（早期）、CS75 / CS55 / CS95、锐程系列、UNI 系列（早期）等
-- 判断方法：车机 **设置 → 系统升级** 里的版本号以 `OS_C211-...` 或 `OS_CA...` 开头
-- **不确定也没关系** —— 只要症状匹配（见上表）就能试，装了没效果卸载即可，不会影响车机
-
-> 这不是长安独有。任何采用「音源仲裁 + 应用白名单」设计的车机都可能有类似问题。
+- 长安 inCall / Coagent **C211** 平台车机（全志 T7，Android 9，1920×720）
+- 车机版本号以 `OS_C211-` 或 `OS_CA` 开头（设置 → 系统升级 里查看）
+- 常见车型：二代逸动、逸动 PLUS（早期）、CS75 / CS55 / CS95、锐程系列、UNI 系列（早期）
+- 仅测试于 `OS_CA6884-V9_V00.00.47-20210517`
 
 ---
 
-## 为什么会有这个问题
+## 使用方法
 
-车机的音频通路采用**音源仲裁**机制，由车机 MCU 统一管控「当前音源」。开机后音源状态是**未初始化**的：
+1. 安装 `CarHelper-v2.0.apk`
+2. 把「车机助手」加入车机的**自启动白名单**（不同版本位置不同，一般在车辆设置里）
+3. 重启车机
+
+之后无需任何操作：
+
+- 打开高德开始导航 → 方向盘切换到「导航信息」页即可看到箭头和距离
+- 打开任意第三方播放器 → 直接有声音
+
+应用**没有界面**，点图标只会弹一条提示；常驻通知只显示「导航仪表桥接运行中」。
+
+---
+
+## 功能一：仪表盘导航
+
+### 背景
+
+出厂高德是长安定制版 4.1.7，升级到公众版 8.x 后，仪表「导航信息」页会变灰不可用。
+
+原因不是播放器/导航软件的问题，而是**协议层断了一环**：
 
 ```
-mCurrentSource = null      音源为空
-mCurrentMainSrc = -1       主音源未设置
+高德 8.x   → AUTONAVI_STANDARD_BROADCAST_SEND (KEY_TYPE=10001) → 仅标准数据
+原厂 4.1.7 → com.autonavi.navigation.NAVIGATION_UPDATES        → com.fce.navi.service → CAN → 仪表
 ```
 
-此时音频数据虽然正常写进了声卡、功放也处于开启状态，但**主音源没被选中，通路没建立** → 无声。
+新版只发标准广播，不发长安 OEM 那条，`com.fce.navi.service` 收不到图标和距离，仪表就把该页置灰。
 
-车机自带的适配应用（酷我、网易云车机版）启动时会通过车机的音源服务**注册音源**，第三方通用播放器不会 —— 所以"先打开酷我"有用。
+### 做法
 
-**CarUnlock 做的事，就是直接调用车机自己的音源仲裁接口：**
+`BridgeService` 常驻监听高德的 `KEY_TYPE=10001` 广播，取出转向图标和到路口距离，按原厂映射表转换后补发 OEM 广播：
+
+```
+ICON (AMap 转向 ID)  →  TBT_Navi_id_mapping  →  navigation_id
+SEG_REMAIN_DIS_AUTO  →  直接透传显示文本    →  navigation_dis
+```
+
+原厂映射表（节选）：
+
+| AMap 转向 | 仪表图标 ID | 含义 |
+|---|---|---|
+| 2 | 27 | 左转 |
+| 3 | 22 | 右转 |
+| 9 | 17 | 直行 |
+| 8 | 25 | 左转掉头 |
+| 15 | 6 | 到达目的地 |
+| 11121~111210 | 235~271 | 环岛左转第 1~10 出口 |
+| 11171~111710 | 334~343 | 环岛右转第 1~10 出口 |
+
+### 几个踩过的坑
+
+- 图标 ID 是 **16 位**，`navigation_id` 低字节是图标、高字节是高位，传 0 会让仪表页变灰
+- 距离不能直接发米：1790 米会被仪表四舍五入成 1.8km，而高德显示 1.7km。改用高德自己的显示文本（`1.7公里` → `"1.7,km"`）后完全一致
+- 超过 9 秒没有导航数据自动清空，仪表回到未导航状态（与原厂一致）
+
+### 仪表能显示什么
+
+只有**箭头图标 + 距离**，没有路名、ETA、红绿灯。
+
+这不是 App 的限制：`com.fce.navi.service` 向 CAN 只写 3 个字段（图标、距离、状态），页面布局由仪表 MCU 固件固定。原厂高德能显示的也只有这些。
+
+---
+
+## 功能二：第三方播放器无声
+
+### 症状
+
+- 第三方播放器显示在播放，但**扬声器没声音**
+- 车机自带的酷我、网易云**有声音**，高德导航也有声音
+- **先打开一次酷我，再开第三方播放器就有声**（经典土办法）
+- 暂停再播放没用，**每次开机复现**
+
+### 原因
+
+C211 采用音源仲裁 + 应用白名单：媒体音频走 `bus0_media_out` → SPDIF，功放开关由 `AudioControlDsp` 按 `Snd1Mute` 控制。第三方 App 不注册音源，功放保持静音（音频数据其实已经正常送到声卡）。
+
+### 做法
+
+开机后调用车机自带的音源仲裁接口：
 
 ```
 requestSource("app")
-  → switchChannel From = null to = APP
-  → AudioControlDsp: >>set source 1 , enable 1
-  → dealWithAMPSwitch ... mCurrentMainSrc 1 → it set to amp unmute
+  → switchChannel From = USB to = APP
+  → select device(out): OUT_SPDIF
+  → notify dsp amp 16 unmute
+  → Snd1Mute 0 → amp unmute
 ```
 
----
-
-## 安装
-
-### 方式一：下载现成 APK
-
-到 [Releases](https://github.com/skyletter/CarUnlock/releases) 下载最新的 `app-debug.apk`，用 U 盘或 adb 安装：
-
-```sh
-adb install -r app-debug.apk
-```
-
-> 车机若拦截安装，可把 APK 放到 U 盘，用车机自带文件管理器打开安装。
-
-### 方式二：自己构建
-
-本工程用 GitHub Actions 云构建，本地无需装 Android SDK：
-
-1. Fork 本仓库
-2. Actions 会自动运行（或手动触发 `workflow_dispatch`）
-3. 在 Artifacts 里下载 `CarUnlock-debug`
-
----
-
-## 使用
-
-**装完就完事了。**
-
-- 应用**没有界面**，点图标也不会弹出任何窗口
-- 开机后自动在后台完成解锁，**不需要任何手动操作**
-- 解锁完成后进程自动退出，不常驻、不弹通知、不申请多余权限
-
-**自带开机自启，不依赖任何第三方自启工具**（应用内注册了 `BOOT_COMPLETED` 广播）。
-
----
-
-## 验证是否生效
-
-播放第三方播放器，然后在电脑上用 adb 看日志：
-
-```sh
-# 应用自身日志
-adb shell "su 0 logcat -d -v time | grep CarUnlock"
-
-# 车机音源链路日志
-adb shell "su 0 logcat -d -v time | grep -E 'switchChannel|mCurrentMainSrc|set to amp'"
-```
-
-**期望看到：**
-
-```
-CarUnlock: 收到开机广播: android.intent.action.BOOT_COMPLETED
-CarUnlock: 已启动解锁服务
-CarUnlock: attempt 1: requestSource("app") -> 1
-CarUnlock: 解锁完成(返回值 1)
-
-MiscUtils---SourceConfig: switchChannel From = null to = APP
-AudioControlDsp: >>set source 1 , enable 1
-AudioControlDsp: dealWithAMPSwitch ... mCurrentMainSrc 1 → it set to amp unmute
-```
-
----
-
-## 不想装应用？直接跑命令也行
-
-用 adb（**无需 root**）：
-
-```sh
-adb shell 'service call fce_misc_service_source_ctrl 1 s16 "app"'
-```
-
-其他可用音源：
-
-| 参数 | 含义 |
-|---|---|
-| `app` | 第三方应用媒体源（目标） |
-| `navi` | 导航 |
-| `usb` | 本地 U 盘 |
+不修改系统分区、不刷机、不需要 root。
 
 ---
 
 ## 技术细节
 
-<details>
-<summary>接口与实现（点开）</summary>
-
-### 目标接口
-
 | 项 | 值 |
 |---|---|
-| 服务名 | `fce_misc_service_source_ctrl` |
-| AIDL | `com.fce.misc.proxy.source.ISourceCtrl` |
-| 服务端实现 | `com.fce.misc.service.source.SourceCtrlImpl` |
-| 所属 APK | `/system/priv-app/FCEMiscService/FCEMiscService.apk` |
-| 方法 | `requestSource(String sourceId)`，事务码 **1** |
-
-### 实现要点
-
-- 用**反射 `ServiceManager` 取 IBinder 后直接 `transact`**，不需要引入车机 AIDL 文件
-- `targetSdk 28` —— 避开 Android 9 的 hidden API 限制
-- 接口**幂等**：音源已是 `app` 时返回 `false`，此时说明已解锁，直接视为完成
-- 权限：实测 **root 与非 root 均可**，普通应用通过 Binder 调用即可，**不需要 root**
-- 失败时自动回退到 root 方式执行 `service call`（若设备已 root）
-
-### 开发注意
-
-- `Theme.NoDisplay` 的 Activity **必须在 `onResume` 完成前 `finish()`**，否则系统抛 `IllegalStateException` 并强杀进程。所以解锁逻辑放在 `UnlockService`，Activity 只负责转发。
-- 应用内用 `sRunning` 静态标志防止被多个入口重复拉起时跑两份任务。
-
-</details>
+| 包名 | `com.leo.cartools` |
+| minSdk / targetSdk | 26 / 28 |
+| 音源服务 | `fce_misc_service_source_ctrl`，AIDL `com.fce.misc.proxy.source.ISourceCtrl`，事务码 1 |
+| 导航服务 | `com.fce.navi.service`（NaviHostService，未导出） |
+| 导航广播 | `com.autonavi.navigation.NAVIGATION_UPDATES`，extra：`navigation_id`(int) / `navigation_dis`("1.7,km") |
+| 仪表属性 | `AP_NAVI_STATE_INFO_ICON_NUMBER` / `AP_NAVI_NEXT_ROADCROSS_DISTANCE` |
 
 ---
 
-## 排障
+## 构建
 
-| 现象 | 处理 |
-|---|---|
-| 装了没效果 | 先按上面「验证」章节看日志。若 `requestSource -> 1` 但依然无声，说明不是同一个问题，欢迎开 issue 附日志 |
-| 日志里 `服务未就绪` | 音频服务启动较慢，应用内置 6 次重试（首次等 8 秒） |
-| 安装报签名冲突 | 先 `adb uninstall com.leo.carunlock` 再装 |
-| 想改解锁的音源 | 修改 `UnlockService.java` 里的 `TARGET_SOURCE` 常量，重新构建 |
+```bash
+gradle assembleDebug
+```
 
----
+产物：`app/build/outputs/apk/debug/app-debug.apk`（用 debug 签名，方便车机直接安装）。
 
-## 免责声明
-
-本项目通过调用车机**自带的音频控制接口**实现功能，不修改系统分区、不刷机、不 root。
-
-但车机系统版本众多，**请自行评估风险**。作者不对因使用本工具造成的任何车辆问题负责。
-
-建议安装前备份重要数据。
+CI（GitHub Actions）会在推送到 `main` 时自动构建并发布 Release。
 
 ---
 
-## 相关背景
+## 已知限制
 
-这个问题的社区记录可以追溯到 2015 年（老逸动车主装第三方播放器无声）。长安车机工具箱（CABOX）官方 FAQ 也记载了同样症状，给出的方案是"用自启动打开自带音乐" —— 治标不治本。
-
-**CarUnlock 是第一个直接调用音源仲裁接口、从机制上解决该问题的方案。**
+- 只在 `OS_CA6884-V9_V00.00.47-20210517` 上验证过，其他固件可能字段不同
+- 仪表显示内容受固件限制，无法扩展
+- 部分车机重启后 USB ADB 授权失效，与 App 无关
 
 ---
 

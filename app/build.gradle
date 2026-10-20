@@ -3,15 +3,15 @@ plugins {
 }
 
 android {
-    namespace 'com.leo.carunlock'
+    namespace 'com.leo.cartools'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.leo.carunlock"
-        minSdk 21
+        applicationId "com.leo.cartools"
+        minSdk 26
         targetSdk 28          // 保持 28:Android 9 上反射 ServiceManager 不受 hidden API 限制
-        versionCode 1
-        versionName "1.0"
+        versionCode 20
+        versionName "2.0"
     }
 
     buildTypes {

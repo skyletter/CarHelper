@@ -33,22 +33,22 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk out/CarUnlock-v1.0.apk
+          cp app/build/outputs/apk/debug/app-debug.apk out/CarHelper-v2.0.apk
           ls -l out/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CarUnlock-debug
+          name: CarHelper-debug
           path: out/*.apk
           if-no-files-found: error
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0
-          name: v1.0 — 首个版本
-          files: out/CarUnlock-v1.0.apk
+          tag_name: v2.0
+          name: v2.0 — 导航仪表桥接 + 音源解锁
+          files: out/CarHelper-v2.0.apk
           body: |
             长安 C211 平台车机 —— 第三方播放器无声修复。
 
@@ -61,7 +61,7 @@ jobs:
 
             ## 使用方法
 
-            1. 下载下面的 `CarUnlock-v1.0.apk` 并安装
+            1. 下载下面的 `CarHelper-v2.0.apk` 并安装
             2. 重启车机
             3. 完成 —— 无需任何配置
 
