@@ -9,13 +9,11 @@
         android:icon="@mipmap/ic_launcher"
         android:label="车机助手">
 
-        <!-- 无界面入口：拉起两个服务后立即退出，只提示一条 Toast -->
+        <!-- 控制面板：查看状态、手动解锁、重启桥接 -->
         <activity
             android:name=".MainActivity"
-            android:excludeFromRecents="true"
             android:exported="true"
-            android:noHistory="true"
-            android:theme="@android:style/Theme.NoDisplay">
+            android:theme="@android:style/Theme.Material.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -35,6 +36,15 @@ public class BridgeService extends Service {
 
     private BroadcastReceiver rx;
     private final Handler handler = new Handler(Looper.getMainLooper());
+
+    /** 供界面直接读取运行状态 */
+    public class LocalBinder extends Binder {
+        public BridgeService service() {
+            return BridgeService.this;
+        }
+    }
+
+    private final LocalBinder binder = new LocalBinder();
 
     private int lastIcon = -1;
     private String lastDisStr = "";
@@ -195,6 +205,22 @@ public class BridgeService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
-        return null;
+        return binder;
+    }
+
+    /* ---------- 界面只读状态 ---------- */
+
+    public boolean isNavActive() {
+        return active;
+    }
+
+    /** 返回 "1.7 km" 这样的可读距离，无导航时返回 null */
+    public String getNavDistance() {
+        if (!active || lastDisStr == null || lastDisStr.isEmpty()) return null;
+        return lastDisStr.replace(",", " ");
+    }
+
+    public long getLastRxAgoMs() {
+        return lastRxAt == 0 ? -1 : System.currentTimeMillis() - lastRxAt;
     }
 }

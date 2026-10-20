@@ -13,8 +13,8 @@ android {
         // 反射 ServiceManager.getService 在 P 上属 greylist（可用，会打一条日志）；
         // 若将来固件升到 Android 10+，需改用 Parcel / IBinder 别名方案获取该 binder。
         targetSdk 28
-        versionCode 21
-        versionName "2.1"
+        versionCode 22
+        versionName "2.2"
     }
 
     buildTypes {
