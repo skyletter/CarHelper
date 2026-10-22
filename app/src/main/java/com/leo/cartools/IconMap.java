@@ -40,6 +40,11 @@ public class IconMap {
         MAP.put(27, 351);
         MAP.put(28, 350);
 
+        // 高德 8.x 扩展动作码（NEW_ICON）：
+        // 65/66 表示靠左/靠右（进入或继续主路、匝道分流），对应基础图标 4/5。
+        MAP.put(65, 28);   // 靠左 -> 左前方
+        MAP.put(66, 21);   // 靠右 -> 右前方
+
         // 环岛左转 1~10 出口
         MAP.put(11121, 235);
         MAP.put(11122, 239);
@@ -69,5 +74,18 @@ public class IconMap {
     public static int toCluster(int amapIcon) {
         Integer v = MAP.get(amapIcon);
         return v == null ? -1 : v;
+    }
+
+    /**
+     * 高德 8.x 的 NEW_ICON 是扩展动作码，优先级高于旧的 ICON。
+     * NEW_ICON 映射不到时回退到 ICON，避免旧字段残留把新指令覆盖掉。
+     */
+    public static int toClusterPreferred(int oldIcon, int newIcon) {
+        // NEW_ICON=1 是自车图标，不能盖掉真正的转向；其余扩展码优先
+        int cluster = newIcon > 1 ? toCluster(newIcon) : -1;
+        if (cluster <= 0 && oldIcon > 0) {
+            cluster = toCluster(oldIcon);
+        }
+        return cluster;
     }
 }
