@@ -6,12 +6,12 @@ package com.leo.cartools;
  * 纯 Java 实现，不依赖 Android，便于在 JVM 上做单元测试。
  *
  * 规则：
- *   外循环 → 内循环：车速 ≤ 阈值−迟滞（越过即切）
- *   内循环 → 外循环：车速 ≥ 阈值+迟滞（越过即切）
+ *   外循环 → 内循环：车速 ≤ 阈值−迟滞，持续 {@link #CONFIRM_MS}
+ *   内循环 → 外循环：车速 ≥ 阈值+迟滞，持续 {@link #CONFIRM_MS}
  *   两次切换之间至少间隔 {@link #MIN_DWELL_MS}
  *
- * 不再对速度条件额外计时：加速到 30 km/h 本身需要 2~3 秒，
- * 迟滞区间已足以过滤速度抖动，额外等待只会让切内循环变慢。
+ * 迟滞过滤速度数值的抖动，时间确认过滤"短暂让行、红灯刚停就绿灯"这类短时状态。
+ * 两者处理的是不同维度，不能互相替代。
  *
  * 让行（暂停自动，不改动当前模式）：
  *   - 总开关关闭
@@ -32,6 +32,8 @@ public final class ClimateCore {
     /** 迟滞带宽：切外 = 阈值+5，切内 = 阈值−5 */
     public static final int HYSTERESIS = 5;
 
+    /** 速度条件需持续的时间，两个方向统一 */
+    public static final long CONFIRM_MS = 3_000L;
     /** 两次切换的最小间隔（防抖） */
     public static final long MIN_DWELL_MS = 30_000L;
     /** GPS 多久没有更新视为失效 */
@@ -106,6 +108,10 @@ public final class ClimateCore {
 
     private long lastSwitchAt = 0L;
     private long lastGpsAt = 0L;
+    /** 当前速度条件从何时开始满足 */
+    private long conditionSince = 0L;
+    /** conditionSince 对应的条件方向，避免条件变化时误用旧计时 */
+    private Reason pendingReason = null;
 
     // ---------- 外部设置 ----------
 
@@ -152,6 +158,7 @@ public final class ClimateCore {
     /** 用户手动操作后，占用最短驻留窗口 */
     public void onManualOverride(long now) {
         this.lastSwitchAt = now;
+        resetCondition();
     }
 
     // ---------- 核心判定 ----------
@@ -194,24 +201,51 @@ public final class ClimateCore {
         int hi = threshold + HYSTERESIS;
         int lo = threshold - HYSTERESIS;
 
-        // 速度越过阈值即切换，不再额外计时：
-        // 加速到 30 km/h 本身需要 2~3 秒，迟滞区间已经过滤了速度抖动。
+        // 速度越过边界后需持续 CONFIRM_MS 才切换：
+        // 迟滞过滤数值抖动，时间过滤"短暂让行、红灯刚停就绿灯"这类短时状态。
         if (mode == Mode.OUTSIDE) {
-            if (speedKmh <= lo) {
+            if (speedKmh > lo) {
+                resetCondition();
+                return hold(speedKmh < hi ? Reason.IN_HYSTERESIS : Reason.ALREADY);
+            }
+            if (startCondition(Reason.STOPPED, now) && (now - conditionSince) >= CONFIRM_MS) {
                 return doSwitch(Mode.INSIDE, Reason.STOPPED, now);
             }
-            return hold(speedKmh < hi ? Reason.IN_HYSTERESIS : Reason.ALREADY);
+            return hold(Reason.PENDING);
         } else {
-            if (speedKmh >= hi) {
+            if (speedKmh < hi) {
+                resetCondition();
+                return hold(speedKmh > lo ? Reason.IN_HYSTERESIS : Reason.ALREADY);
+            }
+            if (startCondition(Reason.MOVING, now) && (now - conditionSince) >= CONFIRM_MS) {
                 return doSwitch(Mode.OUTSIDE, Reason.MOVING, now);
             }
-            return hold(speedKmh > lo ? Reason.IN_HYSTERESIS : Reason.ALREADY);
+            return hold(Reason.PENDING);
         }
+    }
+
+    /**
+     * 记录条件起始时间。返回 true 表示计时已就绪。
+     * 条件方向变化时重新计时，避免"停 2 秒 → 动 1 秒 → 停 2 秒"被算成累计 4 秒。
+     */
+    private boolean startCondition(Reason reason, long now) {
+        if (pendingReason != reason) {
+            pendingReason = reason;
+            conditionSince = now;
+            return false;
+        }
+        return true;
+    }
+
+    private void resetCondition() {
+        pendingReason = null;
+        conditionSince = 0L;
     }
 
     private Decision doSwitch(Mode target, Reason reason, long now) {
         mode = target;
         lastSwitchAt = now;
+        resetCondition();
         return new Decision(Action.SWITCH, target, reason);
     }
 
