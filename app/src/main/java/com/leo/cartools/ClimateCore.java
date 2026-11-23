@@ -6,9 +6,12 @@ package com.leo.cartools;
  * 纯 Java 实现，不依赖 Android，便于在 JVM 上做单元测试。
  *
  * 规则：
- *   外循环 → 内循环：车速 ≤ 阈值−迟滞，持续 {@link #STOP_CONFIRM_MS}
- *   内循环 → 外循环：车速 ≥ 阈值+迟滞，持续 {@link #RUN_CONFIRM_MS}
+ *   外循环 → 内循环：车速 ≤ 阈值−迟滞（越过即切）
+ *   内循环 → 外循环：车速 ≥ 阈值+迟滞（越过即切）
  *   两次切换之间至少间隔 {@link #MIN_DWELL_MS}
+ *
+ * 不再对速度条件额外计时：加速到 30 km/h 本身需要 2~3 秒，
+ * 迟滞区间已足以过滤速度抖动，额外等待只会让切内循环变慢。
  *
  * 让行（暂停自动，不改动当前模式）：
  *   - 总开关关闭
@@ -29,11 +32,7 @@ public final class ClimateCore {
     /** 迟滞带宽：切外 = 阈值+5，切内 = 阈值−5 */
     public static final int HYSTERESIS = 5;
 
-    /** 停车多久后切内循环（快，减少尾气吸入） */
-    public static final long STOP_CONFIRM_MS = 5_000L;
-    /** 行驶多久后切外循环（慢，避免走走停停反复切） */
-    public static final long RUN_CONFIRM_MS = 8_000L;
-    /** 两次切换的最小间隔 */
+    /** 两次切换的最小间隔（防抖） */
     public static final long MIN_DWELL_MS = 30_000L;
     /** GPS 多久没有更新视为失效 */
     public static final long GPS_LOST_MS = 30_000L;
@@ -107,10 +106,6 @@ public final class ClimateCore {
 
     private long lastSwitchAt = 0L;
     private long lastGpsAt = 0L;
-    /** 当前速度条件从何时开始满足 */
-    private long conditionSince = 0L;
-    /** conditionSince 对应的条件方向，避免条件变化时误用旧计时 */
-    private Reason pendingReason = null;
 
     // ---------- 外部设置 ----------
 
@@ -154,11 +149,9 @@ public final class ClimateCore {
         this.gear = raw;
     }
 
-    /** 用户手动操作后，重置计时并占用最短驻留窗口 */
+    /** 用户手动操作后，占用最短驻留窗口 */
     public void onManualOverride(long now) {
         this.lastSwitchAt = now;
-        this.conditionSince = 0L;
-        this.pendingReason = null;
     }
 
     // ---------- 核心判定 ----------
@@ -201,51 +194,24 @@ public final class ClimateCore {
         int hi = threshold + HYSTERESIS;
         int lo = threshold - HYSTERESIS;
 
+        // 速度越过阈值即切换，不再额外计时：
+        // 加速到 30 km/h 本身需要 2~3 秒，迟滞区间已经过滤了速度抖动。
         if (mode == Mode.OUTSIDE) {
-            // 只有明确低于下限才考虑切内
-            if (speedKmh > lo) {
-                resetCondition();
-                return hold(speedKmh < hi ? Reason.IN_HYSTERESIS : Reason.ALREADY);
-            }
-            if (startCondition(Reason.STOPPED, now) && (now - conditionSince) >= STOP_CONFIRM_MS) {
+            if (speedKmh <= lo) {
                 return doSwitch(Mode.INSIDE, Reason.STOPPED, now);
             }
-            return hold(Reason.PENDING);
+            return hold(speedKmh < hi ? Reason.IN_HYSTERESIS : Reason.ALREADY);
         } else {
-            // 内循环：只有明确高于上限才考虑切外
-            if (speedKmh < hi) {
-                resetCondition();
-                return hold(speedKmh > lo ? Reason.IN_HYSTERESIS : Reason.ALREADY);
-            }
-            if (startCondition(Reason.MOVING, now) && (now - conditionSince) >= RUN_CONFIRM_MS) {
+            if (speedKmh >= hi) {
                 return doSwitch(Mode.OUTSIDE, Reason.MOVING, now);
             }
-            return hold(Reason.PENDING);
+            return hold(speedKmh > lo ? Reason.IN_HYSTERESIS : Reason.ALREADY);
         }
-    }
-
-    /**
-     * 记录条件起始时间。返回 true 表示计时已就绪。
-     * 条件方向变化时重新计时，避免"停车 3 秒 → 动 1 秒 → 停 2 秒"被算成累计 5 秒。
-     */
-    private boolean startCondition(Reason reason, long now) {
-        if (pendingReason != reason) {
-            pendingReason = reason;
-            conditionSince = now;
-            return false;
-        }
-        return true;
-    }
-
-    private void resetCondition() {
-        pendingReason = null;
-        conditionSince = 0L;
     }
 
     private Decision doSwitch(Mode target, Reason reason, long now) {
         mode = target;
         lastSwitchAt = now;
-        resetCondition();
         return new Decision(Action.SWITCH, target, reason);
     }
 
@@ -256,11 +222,5 @@ public final class ClimateCore {
     /** 是否拿到过 GPS（供界面展示） */
     public boolean hasGps() {
         return hasGps;
-    }
-
-    // ---------- 仅测试用 ----------
-
-    long conditionSinceForTest() {
-        return conditionSince;
     }
 }

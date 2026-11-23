@@ -7,7 +7,9 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 /**
- * ClimateCore 状态机测试。时间用毫秒整数模拟，不依赖真实时钟。
+ * ClimateCore 状态机测试。
+ *
+ * 判定方式：速度越过迟滞边界即切换，不额外计时。
  */
 public class ClimateCoreTest {
 
@@ -18,28 +20,29 @@ public class ClimateCoreTest {
     }
 
     @Test
-    public void stoppedSwitchesToInsideAfter5s() {
+    public void stoppedBelowLowerBoundSwitchesInsideImmediately() {
         ClimateCore c = enabled();
-        long t = 10_000L;
-        // 前 5 秒内不切换
-        for (int i = 0; i < 5; i++) {
-            assertFalse("i=" + i, c.update(t + i * 1000L, 0f, true).shouldSwitch());
-        }
-        ClimateCore.Decision d = c.update(t + 5000L, 0f, true);
+        // 默认阈值 25，下限 20；速度 0 应立刻切内
+        ClimateCore.Decision d = c.update(10_000L, 0f, true);
         assertTrue(d.shouldSwitch());
         assertEquals(ClimateCore.Mode.INSIDE, d.mode);
         assertEquals(ClimateCore.Reason.STOPPED, d.reason);
     }
 
     @Test
-    public void movingSwitchesToOutsideAfter8s() {
+    public void creepAt10SwitchesInside() {
+        ClimateCore c = enabled();
+        // 蠕行 10 km/h 也属于堵车
+        assertTrue(c.update(10_000L, 10f, true).shouldSwitch());
+        assertEquals(ClimateCore.Mode.INSIDE, c.getMode());
+    }
+
+    @Test
+    public void fastEnoughSwitchesOutsideImmediately() {
         ClimateCore c = enabled();
         c.seedMode(ClimateCore.Mode.INSIDE);
-        long t = 10_000L;
-        for (int i = 0; i < 8; i++) {
-            assertFalse("i=" + i, c.update(t + i * 1000L, 40f, true).shouldSwitch());
-        }
-        ClimateCore.Decision d = c.update(t + 8000L, 40f, true);
+        // 上限 30，速度 40 立刻切外
+        ClimateCore.Decision d = c.update(10_000L, 40f, true);
         assertTrue(d.shouldSwitch());
         assertEquals(ClimateCore.Mode.OUTSIDE, d.mode);
         assertEquals(ClimateCore.Reason.MOVING, d.reason);
@@ -48,21 +51,15 @@ public class ClimateCoreTest {
     @Test
     public void hysteresisBandKeepsCurrentState() {
         ClimateCore c = enabled();
-        long t = 10_000L;
-        // 25 km/h 落在阈值 25±5 的中间区间，永远不切换
-        for (int i = 0; i < 30; i++) {
-            assertFalse(c.update(t + i * 1000L, 25f, true).shouldSwitch());
+        // 25 km/h 落在 20~30 中间区间，不切换
+        for (int i = 0; i < 20; i++) {
+            assertFalse(c.update(10_000L + i * 1000L, 25f, true).shouldSwitch());
         }
         assertEquals(ClimateCore.Mode.OUTSIDE, c.getMode());
-    }
 
-    @Test
-    public void slowCreepBelowLowerBoundSwitchesInside() {
-        ClimateCore c = enabled();
-        long t = 10_000L;
-        // 蠕行 10 km/h（≤ 20）应判为堵车
-        for (int i = 0; i <= 5; i++) {
-            c.update(t + i * 1000L, 10f, true);
+        c.seedMode(ClimateCore.Mode.INSIDE);
+        for (int i = 0; i < 20; i++) {
+            assertFalse(c.update(40_000L + i * 1000L, 25f, true).shouldSwitch());
         }
         assertEquals(ClimateCore.Mode.INSIDE, c.getMode());
     }
@@ -71,24 +68,26 @@ public class ClimateCoreTest {
     public void minDwellBlocksImmediateReverse() {
         ClimateCore c = enabled();
         long t = 10_000L;
-        // 停车切内
-        for (int i = 0; i <= 5; i++) {
-            c.update(t + i * 1000L, 0f, true);
-        }
+        assertTrue(c.update(t, 0f, true).shouldSwitch());   // 切内
         assertEquals(ClimateCore.Mode.INSIDE, c.getMode());
+
         // 刚切完立刻高速，30 秒内不应切回
-        ClimateCore.Decision d = c.update(t + 6000L, 60f, true);
+        ClimateCore.Decision d = c.update(t + 5000L, 60f, true);
         assertFalse(d.shouldSwitch());
         assertEquals(ClimateCore.Reason.MIN_DWELL, d.reason);
+
+        // 超过驻留后可以切
+        ClimateCore.Decision d2 = c.update(t + 31_000L, 60f, true);
+        assertTrue(d2.shouldSwitch());
+        assertEquals(ClimateCore.Mode.OUTSIDE, d2.mode);
     }
 
     @Test
     public void autoModeSuspends() {
         ClimateCore c = enabled();
         c.setAutoOn(true);
-        long t = 10_000L;
-        for (int i = 0; i < 20; i++) {
-            ClimateCore.Decision d = c.update(t + i * 1000L, 0f, true);
+        for (int i = 0; i < 10; i++) {
+            ClimateCore.Decision d = c.update(10_000L + i * 1000L, 0f, true);
             assertFalse(d.shouldSwitch());
             assertEquals(ClimateCore.Reason.AUTO_ON, d.reason);
         }
@@ -98,9 +97,8 @@ public class ClimateCoreTest {
     public void defrostSuspends() {
         ClimateCore c = enabled();
         c.setDefrostOn(true);
-        long t = 10_000L;
-        for (int i = 0; i < 20; i++) {
-            ClimateCore.Decision d = c.update(t + i * 1000L, 0f, true);
+        for (int i = 0; i < 10; i++) {
+            ClimateCore.Decision d = c.update(10_000L + i * 1000L, 0f, true);
             assertFalse(d.shouldSwitch());
             assertEquals(ClimateCore.Reason.DEFROST_ON, d.reason);
         }
@@ -109,11 +107,10 @@ public class ClimateCoreTest {
     @Test
     public void parkedGearSuspends() {
         ClimateCore c = enabled();
-        long t = 10_000L;
         int[] parked = {4, 2, 1};   // P / R / N
         for (int g : parked) {
             c.setGear(g);
-            ClimateCore.Decision d = c.update(t, 0f, true);
+            ClimateCore.Decision d = c.update(10_000L, 0f, true);
             assertFalse("gear=" + g, d.shouldSwitch());
             assertEquals("gear=" + g, ClimateCore.Reason.PARKED, d.reason);
         }
@@ -122,12 +119,12 @@ public class ClimateCoreTest {
     @Test
     public void driveAndManualGearDoNotSuspend() {
         ClimateCore c = enabled();
-        long t = 10_000L;
         int[] driving = {8, 12};    // D / M
         for (int g : driving) {
             c.setGear(g);
-            ClimateCore.Decision d = c.update(t, 0f, true);
-            assertEquals("gear=" + g, ClimateCore.Reason.PENDING, d.reason);
+            ClimateCore.Decision d = c.update(10_000L, 0f, true);
+            assertTrue("gear=" + g, d.shouldSwitch());
+            assertEquals("gear=" + g, ClimateCore.Mode.INSIDE, d.mode);
         }
     }
 
@@ -135,16 +132,14 @@ public class ClimateCoreTest {
     public void unknownGearDoesNotSuspend() {
         ClimateCore c = enabled();
         c.setGear(-1);
-        ClimateCore.Decision d = c.update(10_000L, 0f, true);
-        assertEquals(ClimateCore.Reason.PENDING, d.reason);
+        assertTrue(c.update(10_000L, 0f, true).shouldSwitch());
     }
 
     @Test
     public void disabledSuspends() {
         ClimateCore c = new ClimateCore();   // 默认关闭
-        long t = 10_000L;
-        for (int i = 0; i < 20; i++) {
-            ClimateCore.Decision d = c.update(t + i * 1000L, 0f, true);
+        for (int i = 0; i < 10; i++) {
+            ClimateCore.Decision d = c.update(10_000L + i * 1000L, 0f, true);
             assertFalse(d.shouldSwitch());
             assertEquals(ClimateCore.Reason.DISABLED, d.reason);
         }
@@ -154,7 +149,8 @@ public class ClimateCoreTest {
     public void gpsLossKeepsStateAndReportsLost() {
         ClimateCore c = enabled();
         long t = 10_000L;
-        c.update(t, 0f, true);   // 建立 GPS 时间基准
+        c.update(t, 25f, true);   // 建立 GPS 时间基准，中间区间不切换
+
         ClimateCore.Decision last = null;
         for (int i = 1; i <= 40; i++) {
             last = c.update(t + i * 1000L, 0f, false);
@@ -173,31 +169,24 @@ public class ClimateCoreTest {
     }
 
     @Test
-    public void manualOverrideResetsDwell() {
+    public void manualOverrideOccupiesDwell() {
         ClimateCore c = enabled();
         c.seedMode(ClimateCore.Mode.INSIDE);
         long t = 10_000L;
         c.onManualOverride(t);
-        // 手动操作后 30 秒内不自动切
         ClimateCore.Decision d = c.update(t + 20_000L, 60f, true);
         assertFalse(d.shouldSwitch());
         assertEquals(ClimateCore.Reason.MIN_DWELL, d.reason);
     }
 
     @Test
-    public void conditionTimerResetsWhenSpeedConditionFlips() {
+    public void thresholdChangeShiftsBoundaries() {
         ClimateCore c = enabled();
-        long t = 10_000L;
-        // 停 3 秒
-        for (int i = 0; i < 3; i++) {
-            c.update(t + i * 1000L, 0f, true);
-        }
-        // 动 1 秒（打断计时）
-        c.update(t + 3000L, 40f, true);
-        // 再停 3 秒，累计不足 5 秒，不应切换
-        for (int i = 1; i <= 3; i++) {
-            assertFalse(c.update(t + 3000L + i * 1000L, 0f, true).shouldSwitch());
-        }
-        assertEquals(ClimateCore.Mode.OUTSIDE, c.getMode());
+        c.setThreshold(35);   // 下限 30，上限 40
+        // 速度 32 落在 30~40 之间，不切换
+        assertFalse(c.update(10_000L, 32f, true).shouldSwitch());
+        // 速度 45 超过上限，切外
+        c.seedMode(ClimateCore.Mode.INSIDE);
+        assertTrue(c.update(50_000L, 45f, true).shouldSwitch());
     }
 }
