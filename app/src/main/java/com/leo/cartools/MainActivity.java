@@ -14,10 +14,12 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -48,6 +50,32 @@ public class MainActivity extends Activity {
     private BridgeService bridge;
     private boolean bound;
     private final Handler ticker = new Handler(Looper.getMainLooper());
+
+    /* ---------- 自动内外循环 ---------- */
+    private ClimateService climate;
+    private boolean climateBound;
+    private View climateDot;
+    private TextView climateTitle;
+    private TextView climateDesc;
+    private Button btnClimateToggle;
+    private EditText etThreshold;
+
+    private final ServiceConnection climateConn = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            if (service instanceof ClimateService.LocalBinder) {
+                climate = ((ClimateService.LocalBinder) service).service();
+            }
+            climateBound = true;
+            refresh();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            climate = null;
+            refresh();
+        }
+    };
 
     private final ServiceConnection conn = new ServiceConnection() {
         @Override
@@ -81,6 +109,7 @@ public class MainActivity extends Activity {
         // 开机自启拉起本界面时，只启动服务、不显示面板（60 秒内视为开机阶段）
         if (SystemClock.elapsedRealtime() < 60_000L) {
             startBridge();
+            startClimate();
             finish();
             return;
         }
@@ -90,6 +119,26 @@ public class MainActivity extends Activity {
 
         // 桥接是核心功能，进界面即确保在跑
         startBridge();
+
+        requestLocationIfNeeded();
+    }
+
+    private void requestLocationIfNeeded() {
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+            }, 1001);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            refresh();
+        }
     }
 
     @Override
@@ -99,6 +148,11 @@ public class MainActivity extends Activity {
         startBridge();
         Intent it = new Intent(this, BridgeService.class);
         bound = bindService(it, conn, Context.BIND_AUTO_CREATE);
+
+        startClimate();
+        Intent ci = new Intent(this, ClimateService.class);
+        climateBound = bindService(ci, climateConn, Context.BIND_AUTO_CREATE);
+
         ticker.post(refreshTask);
     }
 
@@ -112,8 +166,25 @@ public class MainActivity extends Activity {
             }
             bound = false;
         }
+        if (climateBound) {
+            try {
+                unbindService(climateConn);
+            } catch (Throwable ignored) {
+            }
+            climateBound = false;
+        }
         bridge = null;
+        climate = null;
         super.onStop();
+    }
+
+    private void startClimate() {
+        Intent it = new Intent(this, ClimateService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(it);
+        } else {
+            startService(it);
+        }
     }
 
     private void startBridge() {
@@ -169,6 +240,79 @@ public class MainActivity extends Activity {
             btnUnlock.setText("立即解锁音源");
             btnUnlock.setBackground(roundRect(ACCENT, 12));
             btnUnlock.setTextColor(Color.WHITE);
+        }
+
+        refreshClimate();
+    }
+
+    private void refreshClimate() {
+        if (climateDot == null) {
+            return;
+        }
+        boolean on = climate != null && climate.isEnabled();
+        boolean perm = climate != null && climate.hasPermission();
+
+        if (climate == null) {
+            setDot(climateDot, WARN);
+            climateTitle.setText("未运行");
+            climateTitle.setTextColor(WARN);
+            climateDesc.setText("服务未启动");
+        } else if (!on) {
+            setDot(climateDot, SUB);
+            climateTitle.setText("已关闭");
+            climateTitle.setTextColor(SUB);
+            climateDesc.setText("打开开关后：停车自动切内循环，行驶自动切外循环");
+        } else if (!perm) {
+            setDot(climateDot, WARN);
+            climateTitle.setText("缺少定位权限");
+            climateTitle.setTextColor(WARN);
+            climateDesc.setText("需要授予定位权限才能获取车速");
+        } else {
+            boolean inside = climate.getMode() == ClimateCore.Mode.INSIDE;
+            setDot(climateDot, inside ? ACCENT : OK);
+            climateTitle.setText(inside ? "内循环" : "外循环");
+            climateTitle.setTextColor(inside ? ACCENT : OK);
+            String speed = climate.hasGps()
+                    ? Math.round(climate.getSpeedKmh()) + " km/h"
+                    : "GPS 无信号";
+            climateDesc.setText(speed + " · " + climate.getReason());
+        }
+
+        if (btnClimateToggle != null) {
+            btnClimateToggle.setText(on ? "关闭自动" : "开启自动");
+            btnClimateToggle.setBackground(roundRect(on ? 0xFF262B36 : ACCENT, 10));
+            btnClimateToggle.setTextColor(on ? SUB : Color.WHITE);
+        }
+
+        if (etThreshold != null && climate != null && !etThreshold.hasFocus()) {
+            String want = String.valueOf(climate.getThreshold());
+            if (!want.equals(etThreshold.getText().toString())) {
+                etThreshold.setText(want);
+            }
+        }
+    }
+
+    private void applyThreshold() {
+        if (climate == null || etThreshold == null) {
+            return;
+        }
+        String s = etThreshold.getText().toString().trim();
+        if (s.isEmpty()) {
+            etThreshold.setText(String.valueOf(climate.getThreshold()));
+            return;
+        }
+        try {
+            int v = Integer.parseInt(s);
+            climate.setThreshold(v);
+            int clamped = climate.getThreshold();
+            etThreshold.setText(String.valueOf(clamped));
+            if (v != clamped) {
+                Toast.makeText(this,
+                        "阈值限定在 " + ClimateCore.MIN_THRESHOLD + "~" + ClimateCore.MAX_THRESHOLD
+                                + " 之间，已设为 " + clamped, Toast.LENGTH_SHORT).show();
+            }
+        } catch (Throwable t) {
+            etThreshold.setText(String.valueOf(climate.getThreshold()));
         }
     }
 
@@ -295,6 +439,122 @@ public class MainActivity extends Activity {
         row2.addView(unlockTitle);
         unlockDesc = desc();
         card2.addView(unlockDesc);
+
+        // 卡片 3：自动内外循环
+        LinearLayout card3 = card();
+        root.addView(card3);
+        ((LinearLayout.LayoutParams) card3.getLayoutParams()).topMargin = dp(14);
+
+        LinearLayout row3 = row();
+        card3.addView(row3);
+        climateDot = dot();
+        row3.addView(climateDot);
+        TextView t3 = label("自动内外循环");
+        row3.addView(t3);
+        climateTitle = status();
+        row3.addView(climateTitle);
+        climateDesc = desc();
+        card3.addView(climateDesc);
+
+        // 阈值设置行
+        LinearLayout thrRow = row();
+        LinearLayout.LayoutParams trlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        trlp.topMargin = dp(14);
+        trlp.leftMargin = dp(18);
+        thrRow.setLayoutParams(trlp);
+        card3.addView(thrRow);
+
+        TextView thrLabel = new TextView(this);
+        thrLabel.setText("切换阈值");
+        thrLabel.setTextColor(SUB);
+        thrLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        thrRow.addView(thrLabel);
+
+        etThreshold = new EditText(this);
+        etThreshold.setInputType(InputType.TYPE_CLASS_NUMBER);
+        etThreshold.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        etThreshold.setTextColor(TEXT);
+        etThreshold.setGravity(Gravity.CENTER);
+        etThreshold.setSingleLine(true);
+        LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(dp(64), dp(38));
+        elp.leftMargin = dp(10);
+        elp.rightMargin = dp(6);
+        etThreshold.setLayoutParams(elp);
+        etThreshold.setBackground(roundRect(0xFF262B36, 8));
+        etThreshold.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) applyThreshold();
+        });
+        thrRow.addView(etThreshold);
+
+        TextView unit = new TextView(this);
+        unit.setText("km/h");
+        unit.setTextColor(SUB);
+        unit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        thrRow.addView(unit);
+
+        LinearLayout.LayoutParams togLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(38));
+        togLp.leftMargin = dp(14);
+
+        btnClimateToggle = new Button(this);
+        btnClimateToggle.setAllCaps(false);
+        btnClimateToggle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        btnClimateToggle.setLayoutParams(togLp);
+        btnClimateToggle.setOnClickListener(v -> {
+            if (climate == null) {
+                startClimate();
+                Toast.makeText(this, "自动循环服务启动中，请稍后", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            climate.setEnabled(!climate.isEnabled());
+            refresh();
+        });
+        thrRow.addView(btnClimateToggle);
+
+        // 手动切换行
+        LinearLayout manRow = row();
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        mlp.topMargin = dp(12);
+        mlp.leftMargin = dp(18);
+        manRow.setLayoutParams(mlp);
+        card3.addView(manRow);
+
+        Button btnIn = new Button(this);
+        btnIn.setAllCaps(false);
+        btnIn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        btnIn.setText("切内循环");
+        btnIn.setBackground(roundRect(0xFF262B36, 10));
+        btnIn.setTextColor(TEXT);
+        LinearLayout.LayoutParams bilp = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        btnIn.setLayoutParams(bilp);
+        btnIn.setOnClickListener(v -> {
+            if (climate != null) {
+                climate.manualSwitch(true);
+                Toast.makeText(this, "已切到内循环", Toast.LENGTH_SHORT).show();
+                refresh();
+            }
+        });
+        manRow.addView(btnIn);
+
+        Button btnOut = new Button(this);
+        btnOut.setAllCaps(false);
+        btnOut.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        btnOut.setText("切外循环");
+        btnOut.setBackground(roundRect(0xFF262B36, 10));
+        btnOut.setTextColor(TEXT);
+        LinearLayout.LayoutParams bolp = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        bolp.leftMargin = dp(10);
+        btnOut.setLayoutParams(bolp);
+        btnOut.setOnClickListener(v -> {
+            if (climate != null) {
+                climate.manualSwitch(false);
+                Toast.makeText(this, "已切到外循环", Toast.LENGTH_SHORT).show();
+                refresh();
+            }
+        });
+        manRow.addView(btnOut);
 
         // 按钮
         LinearLayout btns = new LinearLayout(this);

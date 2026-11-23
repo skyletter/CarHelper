@@ -38,6 +38,9 @@ jobs:
         with:
           gradle-version: '8.4'
 
+      - name: Unit tests
+        run: gradle testDebugUnitTest --no-daemon
+
       - name: Build release APK（固定签名）
         run: gradle assembleRelease --no-daemon
 

@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:allowBackup="false"
@@ -28,6 +30,11 @@
         <!-- 音源解锁：完成即自毁，不常驻 -->
         <service
             android:name=".UnlockService"
+            android:exported="false" />
+
+        <!-- 自动内外循环：GPS 判定，面板可控开关 -->
+        <service
+            android:name=".ClimateService"
             android:exported="false" />
 
         <!-- 开机自启（部分车机只发 QUICKBOOT_POWERON） -->
