@@ -306,7 +306,8 @@ public class ClimateService extends Service {
 
     /** 手动强制切换，并占用最短驻留窗口 */
     public void manualSwitch(boolean inside) {
-        int v = inside ? 1 : 0;
+        // 车机约定：0=内循环 1=外循环（与 AAOS 相反，v3.4 实车确认）
+        int v = inside ? 0 : 1;
         boolean ok = CarProp.writeInt(PROP_RECIRC, AREA_CLIMATE, v);
         long now = SystemClock.elapsedRealtime();
         if (ok) {
