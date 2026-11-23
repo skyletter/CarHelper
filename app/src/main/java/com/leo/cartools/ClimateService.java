@@ -304,21 +304,6 @@ public class ClimateService extends Service {
         return lastDefrost;
     }
 
-    /** 手动强制切换，并占用最短驻留窗口 */
-    public void manualSwitch(boolean inside) {
-        // 车机约定：0=内循环 1=外循环（与 AAOS 相反，v3.4 实车确认）
-        int v = inside ? 0 : 1;
-        boolean ok = CarProp.writeInt(PROP_RECIRC, AREA_CLIMATE, v);
-        long now = SystemClock.elapsedRealtime();
-        if (ok) {
-            core.seedMode(inside ? ClimateCore.Mode.INSIDE : ClimateCore.Mode.OUTSIDE);
-            core.onManualOverride(now);
-            lastWriteAt = now;
-            lastSwitchAt = now;
-        }
-        Log.i(TAG, "climate manual " + (inside ? "inside" : "outside") + " ok=" + ok);
-    }
-
     private android.content.SharedPreferences prefs() {
         return getSharedPreferences("cartools", MODE_PRIVATE);
     }

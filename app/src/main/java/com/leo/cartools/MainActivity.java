@@ -606,50 +606,6 @@ public class MainActivity extends Activity {
         cfUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         cfRow.addView(cfUnit);
 
-        // 手动切换行
-        LinearLayout manRow = row();
-        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        mlp.topMargin = dp(12);
-        mlp.leftMargin = dp(18);
-        manRow.setLayoutParams(mlp);
-        card3.addView(manRow);
-
-        Button btnIn = new Button(this);
-        btnIn.setAllCaps(false);
-        btnIn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        btnIn.setText("切内循环");
-        btnIn.setBackground(roundRect(0xFF262B36, 10));
-        btnIn.setTextColor(TEXT);
-        LinearLayout.LayoutParams bilp = new LinearLayout.LayoutParams(0, dp(40), 1f);
-        btnIn.setLayoutParams(bilp);
-        btnIn.setOnClickListener(v -> {
-            if (climate != null) {
-                climate.manualSwitch(true);
-                Toast.makeText(this, "已切到内循环", Toast.LENGTH_SHORT).show();
-                refresh();
-            }
-        });
-        manRow.addView(btnIn);
-
-        Button btnOut = new Button(this);
-        btnOut.setAllCaps(false);
-        btnOut.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        btnOut.setText("切外循环");
-        btnOut.setBackground(roundRect(0xFF262B36, 10));
-        btnOut.setTextColor(TEXT);
-        LinearLayout.LayoutParams bolp = new LinearLayout.LayoutParams(0, dp(40), 1f);
-        bolp.leftMargin = dp(10);
-        btnOut.setLayoutParams(bolp);
-        btnOut.setOnClickListener(v -> {
-            if (climate != null) {
-                climate.manualSwitch(false);
-                Toast.makeText(this, "已切到外循环", Toast.LENGTH_SHORT).show();
-                refresh();
-            }
-        });
-        manRow.addView(btnOut);
-
         // 按钮
         LinearLayout btns = new LinearLayout(this);
         btns.setOrientation(LinearLayout.HORIZONTAL);
