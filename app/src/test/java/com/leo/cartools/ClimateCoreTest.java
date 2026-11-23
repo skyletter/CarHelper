@@ -118,9 +118,10 @@ public class ClimateCoreTest {
 
     @Test
     public void driveAndManualGearDoNotSuspend() {
-        ClimateCore c = enabled();
         int[] driving = {8, 12};    // D / M
         for (int g : driving) {
+            // 每个档位用独立实例，避免前一轮切换占用最短驻留窗口
+            ClimateCore c = enabled();
             c.setGear(g);
             ClimateCore.Decision d = c.update(10_000L, 0f, true);
             assertTrue("gear=" + g, d.shouldSwitch());
