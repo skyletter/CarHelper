@@ -66,7 +66,7 @@ public final class ClimateCore {
         AUTO_ON,
         /** 除霜开启 */
         DEFROST_ON,
-        /** 档位在 P/R/N，不需要自动切换 */
+        /** 档位在 P/R（N 允许切换），不需要自动切换 */
         PARKED,
         /** GPS 无信号 */
         GPS_LOST,
@@ -194,8 +194,8 @@ public final class ClimateCore {
         if (defrostOn) {
             return hold(Reason.DEFROST_ON);
         }
-        // P/R/N 不切换。档位未知（-1）时不因档位让行，避免功能整体失效
-        if (gear == 4 || gear == 2 || gear == 1) {
+        // P/R 不切换（N 允许：用户有 N 档滑行习惯）。档位未知（-1）时不因档位让行，避免功能整体失效
+        if (gear == 4 || gear == 2) {
             return hold(Reason.PARKED);
         }
 

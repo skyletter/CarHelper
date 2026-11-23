@@ -139,7 +139,7 @@ public class ClimateCoreTest {
 
     @Test
     public void parkedGearSuspends() {
-        int[] parked = {4, 2, 1};   // P / R / N
+        int[] parked = {4, 2};   // P / R（N 允许切换：用户有 N 档滑行习惯）
         for (int g : parked) {
             ClimateCore c = enabled();
             c.setGear(g);
@@ -147,6 +147,16 @@ public class ClimateCoreTest {
             assertFalse("gear=" + g, d.shouldSwitch());
             assertEquals("gear=" + g, ClimateCore.Reason.PARKED, d.reason);
         }
+    }
+
+    @Test
+    public void neutralGearDoesNotSuspend() {
+        // N 档滑行时允许自动切换
+        ClimateCore c = enabled();
+        c.setGear(1);
+        ClimateCore.Decision d = feed(c, T0, 3, 0f);
+        assertTrue(d.shouldSwitch());
+        assertEquals(ClimateCore.Mode.INSIDE, d.mode);
     }
 
     @Test
