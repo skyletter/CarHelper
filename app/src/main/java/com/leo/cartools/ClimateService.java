@@ -179,6 +179,13 @@ public class ClimateService extends Service {
     // ---------- 主循环 ----------
 
     private void step() {
+        // 定位权限可能在服务启动后才授予（面板先起服务再弹授权框），
+        // 每秒复查一次，授予后自动启动 GPS，无需重启服务
+        if (!hasPermission && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            startLocation();
+        }
+
         long now = SystemClock.elapsedRealtime();
 
         Integer auto = CarProp.readInt(PROP_AUTO, AREA_CLIMATE);
@@ -194,9 +201,10 @@ public class ClimateService extends Service {
         core.setDefrostOn(lastDefrost);
         core.setGear(lastGear);
 
-        // 同步车机实际循环状态（用户手动改过时保持一致），写入后 3 秒内跳过
+        // 同步车机实际循环状态（用户手动改过时保持一致），写入后 3 秒内跳过。
+        // 车机约定与 AAOS 直觉相反：0=内循环 1=外循环（实车目视确认）
         if (recirc != null && (now - lastWriteAt) > WRITE_SETTLE_MS) {
-            core.seedMode(recirc == 1 ? ClimateCore.Mode.INSIDE : ClimateCore.Mode.OUTSIDE);
+            core.seedMode(recirc == 0 ? ClimateCore.Mode.INSIDE : ClimateCore.Mode.OUTSIDE);
         }
 
         boolean gpsOk = gpsValid && (now - lastLocationAt) < GPS_STALE_MS;
@@ -204,7 +212,8 @@ public class ClimateService extends Service {
         lastReason = reasonText(d.reason);
 
         if (d.shouldSwitch()) {
-            int target = d.mode == ClimateCore.Mode.INSIDE ? 1 : 0;
+            // 车机约定：0=内循环 1=外循环（与 AAOS HVAC_RECIRC_ON 相反，实车确认）
+            int target = d.mode == ClimateCore.Mode.INSIDE ? 0 : 1;
             boolean ok = CarProp.writeInt(PROP_RECIRC, AREA_CLIMATE, target);
             Log.i(TAG, "climate switch -> " + d.mode + " (" + d.reason + ") ok=" + ok
                     + " speed=" + Math.round(speedKmh));
