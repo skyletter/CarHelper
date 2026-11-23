@@ -84,7 +84,7 @@ public class ClimateService extends Service {
         @Override
         public void run() {
             step();
-            handler.postDelayed(this, 1000L);
+            handler.postDelayed(this, 500L);
         }
     };
 
@@ -152,7 +152,7 @@ public class ClimateService extends Service {
         };
 
         try {
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, locationListener,
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0L, 0f, locationListener,
                     Looper.getMainLooper());
             Location last = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             if (last != null && last.hasSpeed()

@@ -577,7 +577,7 @@ public class MainActivity extends Activity {
         cfRow.addView(etConfirm);
 
         TextView cfUnit = new TextView(this);
-        cfUnit.setText("秒（默认 3，限 1~10）");
+        cfUnit.setText("秒（默认 3，限 0~10，0=关闭确认）");
         cfUnit.setTextColor(SUB);
         cfUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         cfRow.addView(cfUnit);

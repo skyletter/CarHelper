@@ -32,10 +32,12 @@ public final class ClimateCore {
     /** 迟滞带宽：切外 = 阈值+5，切内 = 阈值−5 */
     public static final int HYSTERESIS = 5;
 
-    /** 确认时长的默认值与可调范围（毫秒） */
+    /** 确认时长的默认值与可调范围（毫秒），0 表示关闭确认（越过即切） */
     public static final long DEFAULT_CONFIRM_MS = 3_000L;
-    public static final long MIN_CONFIRM_MS = 1_000L;
+    public static final long MIN_CONFIRM_MS = 0L;
     public static final long MAX_CONFIRM_MS = 10_000L;
+    /** 渐进式切换的额外裕度：越过迟滞边界再超出这么多，立即切换不等确认 */
+    public static final int FAST_MARGIN = 5;
     /** 两次切换的最小间隔（防抖） */
     public static final long MIN_DWELL_MS = 30_000L;
     /** GPS 多久没有更新视为失效 */
@@ -215,24 +217,37 @@ public final class ClimateCore {
 
         int hi = threshold + HYSTERESIS;
         int lo = threshold - HYSTERESIS;
+        int hiFast = hi + FAST_MARGIN;   // 默认 35：急加速立即切外
+        int loFast = lo - FAST_MARGIN;   // 默认 15：急停立即切内
 
-        // 速度越过边界后需持续 confirmMs（可配置）才切换：
-        // 迟滞过滤数值抖动，时间过滤"短暂让行、红灯刚停就绿灯"这类短时状态。
         if (mode == Mode.OUTSIDE) {
+            // 渐进式：急停冲破下限裕度线，立即切内
+            if (speedKmh <= loFast) {
+                resetCondition();
+                return doSwitch(Mode.INSIDE, Reason.STOPPED, now);
+            }
             if (speedKmh > lo) {
                 resetCondition();
                 return hold(speedKmh < hi ? Reason.IN_HYSTERESIS : Reason.ALREADY);
             }
-            if (startCondition(Reason.STOPPED, now) && (now - conditionSince) >= confirmMs) {
+            // 边缘区：confirmMs=0 时越过即切，否则需持续确认
+            if (confirmMs <= 0
+                    || (startCondition(Reason.STOPPED, now) && (now - conditionSince) >= confirmMs)) {
                 return doSwitch(Mode.INSIDE, Reason.STOPPED, now);
             }
             return hold(Reason.PENDING);
         } else {
+            // 渐进式：急加速冲破上限裕度线，立即切外
+            if (speedKmh >= hiFast) {
+                resetCondition();
+                return doSwitch(Mode.OUTSIDE, Reason.MOVING, now);
+            }
             if (speedKmh < hi) {
                 resetCondition();
                 return hold(speedKmh > lo ? Reason.IN_HYSTERESIS : Reason.ALREADY);
             }
-            if (startCondition(Reason.MOVING, now) && (now - conditionSince) >= confirmMs) {
+            if (confirmMs <= 0
+                    || (startCondition(Reason.MOVING, now) && (now - conditionSince) >= confirmMs)) {
                 return doSwitch(Mode.OUTSIDE, Reason.MOVING, now);
             }
             return hold(Reason.PENDING);
