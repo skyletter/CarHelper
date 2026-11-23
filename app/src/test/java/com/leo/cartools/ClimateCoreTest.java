@@ -109,8 +109,8 @@ public class ClimateCoreTest {
         assertFalse(d.shouldSwitch());
         assertEquals(ClimateCore.Reason.MIN_DWELL, d.reason);
 
-        // 超过驻留且条件满足后可切
-        ClimateCore.Decision d2 = feed(c, T0 + 31_000L, 3, 60f);
+        // 超过驻留（距上次切换 31 秒）且条件满足后可切
+        ClimateCore.Decision d2 = feed(c, T0 + 34_000L, 3, 60f);
         assertTrue(d2.shouldSwitch());
         assertEquals(ClimateCore.Mode.OUTSIDE, d2.mode);
     }
