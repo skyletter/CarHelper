@@ -6,8 +6,8 @@ package com.leo.cartools;
  * 纯 Java 实现，不依赖 Android，便于在 JVM 上做单元测试。
  *
  * 规则：
- *   外循环 → 内循环：车速 ≤ 阈值−迟滞，持续 {@link #CONFIRM_MS}
- *   内循环 → 外循环：车速 ≥ 阈值+迟滞，持续 {@link #CONFIRM_MS}
+ *   外循环 → 内循环：车速 ≤ 阈值−迟滞，持续 {@link #DEFAULT_CONFIRM_MS}
+ *   内循环 → 外循环：车速 ≥ 阈值+迟滞，持续 {@link #DEFAULT_CONFIRM_MS}
  *   两次切换之间至少间隔 {@link #MIN_DWELL_MS}
  *
  * 迟滞过滤速度数值的抖动，时间确认过滤"短暂让行、红灯刚停就绿灯"这类短时状态。
@@ -32,8 +32,10 @@ public final class ClimateCore {
     /** 迟滞带宽：切外 = 阈值+5，切内 = 阈值−5 */
     public static final int HYSTERESIS = 5;
 
-    /** 速度条件需持续的时间，两个方向统一 */
-    public static final long CONFIRM_MS = 3_000L;
+    /** 确认时长的默认值与可调范围（毫秒） */
+    public static final long DEFAULT_CONFIRM_MS = 3_000L;
+    public static final long MIN_CONFIRM_MS = 1_000L;
+    public static final long MAX_CONFIRM_MS = 10_000L;
     /** 两次切换的最小间隔（防抖） */
     public static final long MIN_DWELL_MS = 30_000L;
     /** GPS 多久没有更新视为失效 */
@@ -99,6 +101,8 @@ public final class ClimateCore {
     private Mode mode = Mode.OUTSIDE;
     private boolean enabled = false;
     private int threshold = DEFAULT_THRESHOLD;
+    /** 速度条件需持续的时间，两个方向统一 */
+    private long confirmMs = DEFAULT_CONFIRM_MS;
 
     private boolean autoOn = false;
     private boolean defrostOn = false;
@@ -131,6 +135,17 @@ public final class ClimateCore {
 
     public int getThreshold() {
         return threshold;
+    }
+
+    /** 确认时长（毫秒），限制在 MIN_CONFIRM_MS ~ MAX_CONFIRM_MS */
+    public void setConfirmMs(long ms) {
+        if (ms < MIN_CONFIRM_MS) ms = MIN_CONFIRM_MS;
+        if (ms > MAX_CONFIRM_MS) ms = MAX_CONFIRM_MS;
+        this.confirmMs = ms;
+    }
+
+    public long getConfirmMs() {
+        return confirmMs;
     }
 
     public Mode getMode() {
@@ -201,14 +216,14 @@ public final class ClimateCore {
         int hi = threshold + HYSTERESIS;
         int lo = threshold - HYSTERESIS;
 
-        // 速度越过边界后需持续 CONFIRM_MS 才切换：
+        // 速度越过边界后需持续 confirmMs（可配置）才切换：
         // 迟滞过滤数值抖动，时间过滤"短暂让行、红灯刚停就绿灯"这类短时状态。
         if (mode == Mode.OUTSIDE) {
             if (speedKmh > lo) {
                 resetCondition();
                 return hold(speedKmh < hi ? Reason.IN_HYSTERESIS : Reason.ALREADY);
             }
-            if (startCondition(Reason.STOPPED, now) && (now - conditionSince) >= CONFIRM_MS) {
+            if (startCondition(Reason.STOPPED, now) && (now - conditionSince) >= confirmMs) {
                 return doSwitch(Mode.INSIDE, Reason.STOPPED, now);
             }
             return hold(Reason.PENDING);
@@ -217,7 +232,7 @@ public final class ClimateCore {
                 resetCondition();
                 return hold(speedKmh > lo ? Reason.IN_HYSTERESIS : Reason.ALREADY);
             }
-            if (startCondition(Reason.MOVING, now) && (now - conditionSince) >= CONFIRM_MS) {
+            if (startCondition(Reason.MOVING, now) && (now - conditionSince) >= confirmMs) {
                 return doSwitch(Mode.OUTSIDE, Reason.MOVING, now);
             }
             return hold(Reason.PENDING);

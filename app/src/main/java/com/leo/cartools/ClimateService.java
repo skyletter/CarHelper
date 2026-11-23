@@ -96,6 +96,7 @@ public class ClimateService extends Service {
         // 恢复用户设置
         core.setEnabled(prefs().getBoolean(PREF_ENABLED, false));
         core.setThreshold(prefs().getInt(PREF_THRESHOLD, ClimateCore.DEFAULT_THRESHOLD));
+        core.setConfirmMs(prefs().getLong(PREF_CONFIRM, ClimateCore.DEFAULT_CONFIRM_MS));
 
         startForeground(2, buildNotification());
         startLocation();
@@ -253,6 +254,15 @@ public class ClimateService extends Service {
         prefs().edit().putInt(PREF_THRESHOLD, core.getThreshold()).apply();
     }
 
+    public long getConfirmMs() {
+        return core.getConfirmMs();
+    }
+
+    public void setConfirmMs(long ms) {
+        core.setConfirmMs(ms);
+        prefs().edit().putLong(PREF_CONFIRM, core.getConfirmMs()).apply();
+    }
+
     public ClimateCore.Mode getMode() {
         return core.getMode();
     }
@@ -305,6 +315,7 @@ public class ClimateService extends Service {
 
     private static final String PREF_ENABLED = "climate_enabled";
     private static final String PREF_THRESHOLD = "climate_threshold";
+    private static final String PREF_CONFIRM = "climate_confirm";
 
     private Notification buildNotification() {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);

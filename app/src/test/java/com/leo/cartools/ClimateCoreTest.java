@@ -14,7 +14,7 @@ import org.junit.Test;
 public class ClimateCoreTest {
 
     private static final long T0 = 10_000L;
-    private static final long CONFIRM = ClimateCore.CONFIRM_MS;
+    private static final long CONFIRM = ClimateCore.DEFAULT_CONFIRM_MS;
 
     private static ClimateCore enabled() {
         ClimateCore c = new ClimateCore();
@@ -219,5 +219,27 @@ public class ClimateCoreTest {
         // 速度 45 超过上限，持续 3 秒切外
         c.seedMode(ClimateCore.Mode.INSIDE);
         assertTrue(feed(c, 60_000L, 3, 45f).shouldSwitch());
+    }
+
+    @Test
+    public void confirmMsClampedToRange() {
+        ClimateCore c = enabled();
+        c.setConfirmMs(500L);
+        assertEquals(ClimateCore.MIN_CONFIRM_MS, c.getConfirmMs());
+        c.setConfirmMs(60_000L);
+        assertEquals(ClimateCore.MAX_CONFIRM_MS, c.getConfirmMs());
+    }
+
+    @Test
+    public void customConfirmMsShiftsWindow() {
+        ClimateCore c = enabled();
+        c.setConfirmMs(5_000L);
+        // 停 4 秒，不足 5 秒确认窗，不切换
+        for (int i = 0; i <= 4; i++) {
+            assertFalse(c.update(T0 + i * 1000L, 0f, true).shouldSwitch());
+        }
+        // 第 5 秒切换
+        assertTrue(c.update(T0 + 5_000L, 0f, true).shouldSwitch());
+        assertEquals(ClimateCore.Mode.INSIDE, c.getMode());
     }
 }

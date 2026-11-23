@@ -59,6 +59,7 @@ public class MainActivity extends Activity {
     private TextView climateDesc;
     private Button btnClimateToggle;
     private EditText etThreshold;
+    private EditText etConfirm;
 
     private final ServiceConnection climateConn = new ServiceConnection() {
         @Override
@@ -290,6 +291,13 @@ public class MainActivity extends Activity {
                 etThreshold.setText(want);
             }
         }
+
+        if (etConfirm != null && climate != null && !etConfirm.hasFocus()) {
+            String want = String.valueOf(climate.getConfirmMs() / 1000L);
+            if (!want.equals(etConfirm.getText().toString())) {
+                etConfirm.setText(want);
+            }
+        }
     }
 
     private void applyThreshold() {
@@ -313,6 +321,31 @@ public class MainActivity extends Activity {
             }
         } catch (Throwable t) {
             etThreshold.setText(String.valueOf(climate.getThreshold()));
+        }
+    }
+
+    private void applyConfirm() {
+        if (climate == null || etConfirm == null) {
+            return;
+        }
+        String s = etConfirm.getText().toString().trim();
+        if (s.isEmpty()) {
+            etConfirm.setText(String.valueOf(climate.getConfirmMs() / 1000L));
+            return;
+        }
+        try {
+            int sec = Integer.parseInt(s);
+            climate.setConfirmMs(sec * 1000L);
+            long clamped = climate.getConfirmMs();
+            etConfirm.setText(String.valueOf(clamped / 1000L));
+            if (sec * 1000L != clamped) {
+                Toast.makeText(this,
+                        "确认时长限定在 " + ClimateCore.MIN_CONFIRM_MS / 1000 + "~"
+                                + ClimateCore.MAX_CONFIRM_MS / 1000 + " 秒之间，已设为 "
+                                + clamped / 1000L + " 秒", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Throwable t) {
+            etConfirm.setText(String.valueOf(climate.getConfirmMs() / 1000L));
         }
     }
 
@@ -511,6 +544,43 @@ public class MainActivity extends Activity {
             refresh();
         });
         thrRow.addView(btnClimateToggle);
+
+        // 确认时长行
+        LinearLayout cfRow = row();
+        LinearLayout.LayoutParams cflp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        cflp.topMargin = dp(12);
+        cflp.leftMargin = dp(18);
+        cfRow.setLayoutParams(cflp);
+        card3.addView(cfRow);
+
+        TextView cfLabel = new TextView(this);
+        cfLabel.setText("确认时长");
+        cfLabel.setTextColor(SUB);
+        cfLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        cfRow.addView(cfLabel);
+
+        etConfirm = new EditText(this);
+        etConfirm.setInputType(InputType.TYPE_CLASS_NUMBER);
+        etConfirm.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        etConfirm.setTextColor(TEXT);
+        etConfirm.setGravity(Gravity.CENTER);
+        etConfirm.setSingleLine(true);
+        LinearLayout.LayoutParams celp = new LinearLayout.LayoutParams(dp(64), dp(38));
+        celp.leftMargin = dp(10);
+        celp.rightMargin = dp(6);
+        etConfirm.setLayoutParams(celp);
+        etConfirm.setBackground(roundRect(0xFF262B36, 8));
+        etConfirm.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) applyConfirm();
+        });
+        cfRow.addView(etConfirm);
+
+        TextView cfUnit = new TextView(this);
+        cfUnit.setText("秒（默认 3，限 1~10）");
+        cfUnit.setTextColor(SUB);
+        cfUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        cfRow.addView(cfUnit);
 
         // 手动切换行
         LinearLayout manRow = row();
