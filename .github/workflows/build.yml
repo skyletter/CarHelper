@@ -61,24 +61,28 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
-          name: v${{ steps.ver.outputs.version }} — 导航仪表桥接 + 音源解锁
+          name: v${{ steps.ver.outputs.version }} — 车机助手
           files: out/CarHelper-v${{ steps.ver.outputs.version }}.apk
           body: |
-            长安 C211 平台车机（全志 T7 / Android 9）二合一工具。
+            长安 C211 平台车机（全志 T7 / Android 9）三合一工具。
 
-            ## 解决两个问题
+            ## 解决三个问题
 
             1. **升级高德后，仪表盘「导航信息」页变灰进不去**
                → 导航时自动恢复，仪表显示转向箭头 + 到路口距离
             2. **第三方播放器显示播放中但没声音**（AntennaPod / 喜马拉雅 / QQ 音乐等）
                → 开机自动解锁音源，不用再先开一次酷我
+            3. **等红灯、堵车时外循环吸尾气**
+               → 停车自动切内循环，跑起来自动切回外循环
 
-            ## 本次更新（v2.5）
+            ## 本次更新（v3.0）
 
-            - 修复高架/匝道「靠左/靠右行驶」时仪表停在上一转向、距离 0m：
-              高德扩展动作码 `NEW_ICON=65/66` 现在映射为左前方/右前方
-            - 距离补充 `NEXT_SEG_REMAIN_DIS(_AUTO)`；0 米不再覆盖有效距离
-            - 未知转向码不再无限冻结仪表；接入 `KEY_TYPE=10019`，结束导航/巡航立即清屏
+            - 新增**自动内外循环**：按 GPS 速度自动切换，面板可开关
+            - 阈值默认 25 km/h（迟滞 ±5），可在面板调整 15~50
+            - 停车 5 秒切内循环、行驶 8 秒切外循环、最短驻留 30 秒
+            - 空调 AUTO / 除霜 / P·R·N 档 / GPS 失效时自动让行，不改变当前状态
+            - 控制面板新增「自动内外循环」卡片：开关、阈值输入、实时状态、手动切内/外
+            - 新增 15 个单元测试，CI 构建前自动运行
 
             ## 使用方法
 
@@ -88,7 +92,7 @@ jobs:
 
             之后无需配置：高德开始导航，方向盘切到「导航信息」页即可；第三方播放器直接有声。
 
-            有控制面板：点图标可查看桥接与解锁状态、手动解锁音源、重启桥接。
+            **自动内外循环需要在控制面板里手动打开开关**（默认关闭），并授予定位权限。
 
             ## 原理
 
@@ -96,6 +100,7 @@ jobs:
               按原厂 `TBT_Navi_id_mapping` 转换转向图标后，补发
               `com.autonavi.navigation.NAVIGATION_UPDATES` 给 `com.fce.navi.service`
             - 音源解锁：调用车机自带 `requestSource("app")`，解除功放静音
+            - 自动内外循环：GPS 测速 + 迟滞状态机，调用 `ICarProperty.setProperty` 写 `HVAC_RECIRC_ON`
 
             不改系统分区、不刷机、不需要 root。
 
