@@ -18,6 +18,7 @@ import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -177,6 +178,15 @@ public class MainActivity extends Activity {
         bridge = null;
         climate = null;
         super.onStop();
+    }
+
+    @Override
+    protected void onPause() {
+        // 兜底保存：按 Home、切后台等离开路径不一定触发焦点丢失，
+        // 在暂停时把两个输入框的当前值落盘，防止刷新逻辑用默认值覆盖
+        applyThreshold();
+        applyConfirm();
+        super.onPause();
     }
 
     private void startClimate() {
@@ -515,6 +525,13 @@ public class MainActivity extends Activity {
         elp.rightMargin = dp(6);
         etThreshold.setLayoutParams(elp);
         etThreshold.setBackground(roundRect(0xFF262B36, 8));
+        etThreshold.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        // 输入法回车立即保存（焦点丢失在回车时不触发，v3.8 修复）
+        etThreshold.setOnEditorActionListener((v, actionId, event) -> {
+            applyThreshold();
+            etThreshold.clearFocus();
+            return true;
+        });
         etThreshold.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) applyThreshold();
         });
@@ -571,6 +588,13 @@ public class MainActivity extends Activity {
         celp.rightMargin = dp(6);
         etConfirm.setLayoutParams(celp);
         etConfirm.setBackground(roundRect(0xFF262B36, 8));
+        etConfirm.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        // 输入法回车立即保存（焦点丢失在回车时不触发，v3.8 修复）
+        etConfirm.setOnEditorActionListener((v, actionId, event) -> {
+            applyConfirm();
+            etConfirm.clearFocus();
+            return true;
+        });
         etConfirm.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) applyConfirm();
         });
