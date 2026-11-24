@@ -264,6 +264,10 @@ public class ClimateService extends Service {
         prefs().edit().putInt(PREF_THRESHOLD, core.getThreshold()).apply();
     }
 
+    public int getHysteresis() {
+        return core.getHysteresis();
+    }
+
     public void setHysteresis(int kmh) {
         core.setHysteresis(kmh);
         prefs().edit().putInt(PREF_HYST, core.getHysteresis()).apply();
