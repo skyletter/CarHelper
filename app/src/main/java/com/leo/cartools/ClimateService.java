@@ -96,6 +96,7 @@ public class ClimateService extends Service {
         // 恢复用户设置
         core.setEnabled(prefs().getBoolean(PREF_ENABLED, false));
         core.setThreshold(prefs().getInt(PREF_THRESHOLD, ClimateCore.DEFAULT_THRESHOLD));
+        core.setHysteresis(prefs().getInt(PREF_HYST, ClimateCore.DEFAULT_HYSTERESIS));
         core.setConfirmMs(prefs().getLong(PREF_CONFIRM, ClimateCore.DEFAULT_CONFIRM_MS));
 
         startForeground(2, buildNotification());
@@ -263,6 +264,11 @@ public class ClimateService extends Service {
         prefs().edit().putInt(PREF_THRESHOLD, core.getThreshold()).apply();
     }
 
+    public void setHysteresis(int kmh) {
+        core.setHysteresis(kmh);
+        prefs().edit().putInt(PREF_HYST, core.getHysteresis()).apply();
+    }
+
     public long getConfirmMs() {
         return core.getConfirmMs();
     }
@@ -310,6 +316,7 @@ public class ClimateService extends Service {
 
     private static final String PREF_ENABLED = "climate_enabled";
     private static final String PREF_THRESHOLD = "climate_threshold";
+    private static final String PREF_HYST = "climate_hysteresis";
     private static final String PREF_CONFIRM = "climate_confirm";
 
     private Notification buildNotification() {

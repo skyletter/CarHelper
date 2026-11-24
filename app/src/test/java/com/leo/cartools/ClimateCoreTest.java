@@ -261,4 +261,25 @@ public class ClimateCoreTest {
         c.seedMode(ClimateCore.Mode.INSIDE);
         assertTrue(c.update(60_000L, 45f, true).shouldSwitch());
     }
+
+    @Test
+    public void hysteresisClampedToRange() {
+        ClimateCore c = enabled();
+        c.setHysteresis(0);
+        assertEquals(ClimateCore.MIN_HYSTERESIS, c.getHysteresis());
+        c.setHysteresis(99);
+        assertEquals(ClimateCore.MAX_HYSTERESIS, c.getHysteresis());
+    }
+
+    @Test
+    public void customHysteresisShiftsBoundaries() {
+        ClimateCore c = enabled();          // 阈值 25，带宽 10 → 切内 ≤15，切外 ≥35，裕度线 10/40
+        c.setHysteresis(10);
+        // 速度 18 在默认带宽下早该切内（≤20），但带宽 10 后落在迟滞区 15~35 内，不切
+        assertFalse(feed(c, T0, 10, 18f).shouldSwitch());
+        // 速度 14 低于下限 15，确认 3 秒后切内
+        ClimateCore.Decision d = feed(c, 60_000L, 3, 14f);
+        assertTrue(d.shouldSwitch());
+        assertEquals(ClimateCore.Mode.INSIDE, d.mode);
+    }
 }

@@ -61,6 +61,7 @@ public class MainActivity extends Activity {
     private Button btnClimateToggle;
     private EditText etThreshold;
     private EditText etConfirm;
+    private EditText etHyst;
 
     private final ServiceConnection climateConn = new ServiceConnection() {
         @Override
@@ -186,6 +187,7 @@ public class MainActivity extends Activity {
         // 在暂停时把两个输入框的当前值落盘，防止刷新逻辑用默认值覆盖
         applyThreshold();
         applyConfirm();
+        applyHysteresis();
         super.onPause();
     }
 
@@ -308,6 +310,13 @@ public class MainActivity extends Activity {
                 etConfirm.setText(want);
             }
         }
+
+        if (etHyst != null && climate != null && !etHyst.hasFocus()) {
+            String want = String.valueOf(climate.getHysteresis());
+            if (!want.equals(etHyst.getText().toString())) {
+                etHyst.setText(want);
+            }
+        }
     }
 
     private void applyThreshold() {
@@ -356,6 +365,31 @@ public class MainActivity extends Activity {
             }
         } catch (Throwable t) {
             etConfirm.setText(String.valueOf(climate.getConfirmMs() / 1000L));
+        }
+    }
+
+    private void applyHysteresis() {
+        if (climate == null || etHyst == null) {
+            return;
+        }
+        String s = etHyst.getText().toString().trim();
+        if (s.isEmpty()) {
+            etHyst.setText(String.valueOf(climate.getHysteresis()));
+            return;
+        }
+        try {
+            int v = Integer.parseInt(s);
+            climate.setHysteresis(v);
+            int clamped = climate.getHysteresis();
+            etHyst.setText(String.valueOf(clamped));
+            if (v != clamped) {
+                Toast.makeText(this,
+                        "迟滞带宽限定在 " + ClimateCore.MIN_HYSTERESIS + "~"
+                                + ClimateCore.MAX_HYSTERESIS + " 之间，已设为 " + clamped,
+                        Toast.LENGTH_SHORT).show();
+            }
+        } catch (Throwable t) {
+            etHyst.setText(String.valueOf(climate.getHysteresis()));
         }
     }
 
@@ -605,6 +639,49 @@ public class MainActivity extends Activity {
         cfUnit.setTextColor(SUB);
         cfUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         cfRow.addView(cfUnit);
+
+        // 迟滞带宽行：切外 = 阈值+带宽，切内 = 阈值−带宽
+        LinearLayout hyRow = row();
+        LinearLayout.LayoutParams hylp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        hylp.topMargin = dp(12);
+        hylp.leftMargin = dp(18);
+        hyRow.setLayoutParams(hylp);
+        card3.addView(hyRow);
+
+        TextView hyLabel = new TextView(this);
+        hyLabel.setText("迟滞带宽");
+        hyLabel.setTextColor(SUB);
+        hyLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        hyRow.addView(hyLabel);
+
+        etHyst = new EditText(this);
+        etHyst.setInputType(InputType.TYPE_CLASS_NUMBER);
+        etHyst.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        etHyst.setTextColor(TEXT);
+        etHyst.setGravity(Gravity.CENTER);
+        etHyst.setSingleLine(true);
+        LinearLayout.LayoutParams help2 = new LinearLayout.LayoutParams(dp(64), dp(38));
+        help2.leftMargin = dp(10);
+        help2.rightMargin = dp(6);
+        etHyst.setLayoutParams(help2);
+        etHyst.setBackground(roundRect(0xFF262B36, 8));
+        etHyst.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        etHyst.setOnEditorActionListener((v, actionId, event) -> {
+            applyHysteresis();
+            etHyst.clearFocus();
+            return true;
+        });
+        etHyst.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) applyHysteresis();
+        });
+        hyRow.addView(etHyst);
+
+        TextView hyUnit = new TextView(this);
+        hyUnit.setText("km/h（默认 5，限 1~15；阈值 25 时 20~30 保持）");
+        hyUnit.setTextColor(SUB);
+        hyUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        hyRow.addView(hyUnit);
 
         // 按钮
         LinearLayout btns = new LinearLayout(this);

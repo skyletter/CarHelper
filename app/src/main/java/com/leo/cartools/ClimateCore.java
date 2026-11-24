@@ -29,8 +29,10 @@ public final class ClimateCore {
     /** 允许用户设置的阈值范围 */
     public static final int MIN_THRESHOLD = 15;
     public static final int MAX_THRESHOLD = 50;
-    /** 迟滞带宽：切外 = 阈值+5，切内 = 阈值−5 */
-    public static final int HYSTERESIS = 5;
+    /** 迟滞带宽默认值与可调范围：切外 = 阈值+带宽，切内 = 阈值−带宽 */
+    public static final int DEFAULT_HYSTERESIS = 5;
+    public static final int MIN_HYSTERESIS = 1;
+    public static final int MAX_HYSTERESIS = 15;
 
     /** 确认时长的默认值与可调范围（毫秒），0 表示关闭确认（越过即切） */
     public static final long DEFAULT_CONFIRM_MS = 3_000L;
@@ -103,6 +105,7 @@ public final class ClimateCore {
     private Mode mode = Mode.OUTSIDE;
     private boolean enabled = false;
     private int threshold = DEFAULT_THRESHOLD;
+    private int hysteresis = DEFAULT_HYSTERESIS;
     /** 速度条件需持续的时间，两个方向统一 */
     private long confirmMs = DEFAULT_CONFIRM_MS;
 
@@ -137,6 +140,17 @@ public final class ClimateCore {
 
     public int getThreshold() {
         return threshold;
+    }
+
+    /** 迟滞带宽（km/h），限制在 MIN_HYSTERESIS ~ MAX_HYSTERESIS */
+    public void setHysteresis(int kmh) {
+        if (kmh < MIN_HYSTERESIS) kmh = MIN_HYSTERESIS;
+        if (kmh > MAX_HYSTERESIS) kmh = MAX_HYSTERESIS;
+        this.hysteresis = kmh;
+    }
+
+    public int getHysteresis() {
+        return hysteresis;
     }
 
     /** 确认时长（毫秒），限制在 MIN_CONFIRM_MS ~ MAX_CONFIRM_MS */
@@ -215,8 +229,8 @@ public final class ClimateCore {
             return hold(Reason.MIN_DWELL);
         }
 
-        int hi = threshold + HYSTERESIS;
-        int lo = threshold - HYSTERESIS;
+        int hi = threshold + hysteresis;
+        int lo = threshold - hysteresis;
         int hiFast = hi + FAST_MARGIN;   // 默认 35：急加速立即切外
         int loFast = lo - FAST_MARGIN;   // 默认 15：急停立即切内
 
